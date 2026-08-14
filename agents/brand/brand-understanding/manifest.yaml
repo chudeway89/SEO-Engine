@@ -1,0 +1,42 @@
+id: BRD-001
+name: Brand Understanding Agent
+version: 1.0.0
+
+description: >
+  Builds the platform's working model of a brand from the brand graph the
+  customer supplied: objectives, services, products, audiences, locations,
+  competitors, voice and approved claims. Reports what is known, what is
+  missing, and what that means for search and content strategy. It never
+  invents facts about the business.
+
+module: agent.py
+
+capabilities:
+  - brand.understand
+  - brand.profile
+  - memory.write
+
+tools:
+  - memory
+
+memory_scopes:
+  - brand
+  - tenant
+
+risk_level: low
+
+input_schema: BrandUnderstandingInput
+output_schema: BrandUnderstandingOutput
+
+autonomous_actions: []
+approval_required_for: []
+
+model_policy:
+  reasoning: medium
+  temperature: 0.1
+  deterministic_fallback: true
+
+prompt: agents/brand/brand-understanding
+tags:
+  - brand
+  - foundation

@@ -18,9 +18,7 @@ from typing import Any
 import structlog
 
 # Default is None rather than {} so the sentinel can never be mutated in place.
-_LOG_CONTEXT: ContextVar[dict[str, Any] | None] = ContextVar(
-    "seo_engine_log_context", default=None
-)
+_LOG_CONTEXT: ContextVar[dict[str, Any] | None] = ContextVar("seo_engine_log_context", default=None)
 
 #: Keys that must never appear in a log line, however they were passed in.
 REDACTED_KEYS = frozenset(
