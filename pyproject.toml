@@ -119,6 +119,9 @@ allow-direct-references = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = [
+    # The repository root, so `tests.fixtures.*` imports resolve regardless of
+    # which directory pytest is invoked from.
+    ".",
     "packages/shared",
     "packages/schemas",
     "packages/domain",

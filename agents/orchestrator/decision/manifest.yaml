@@ -1,0 +1,40 @@
+id: DEC-001
+name: Decision Agent
+version: 1.0.0
+
+description: >
+  Challenges each prioritised opportunity before it becomes a
+  recommendation: is it real, is the evidence sufficient, does an existing
+  asset already solve it, is there a safer action, what could go wrong, does
+  it need approval.
+
+module: agent.py
+
+capabilities:
+  - decision.recommend
+
+tools:
+  - memory
+
+memory_scopes:
+  - tenant
+  - brand
+  - mission
+
+risk_level: medium
+
+input_schema: DecisionInput
+output_schema: DecisionOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  reasoning: high
+  temperature: 0.1
+  deterministic_fallback: true
+
+prompt: agents/orchestrator/decision
+tags:
+  - decision

@@ -1,0 +1,37 @@
+id: ANA-002
+name: GA4 Analytics Agent
+version: 1.0.0
+
+description: >
+  Syncs and analyses Google Analytics 4 traffic and conversions, and
+  establishes the organic lead baseline where one is measurable.
+
+module: agent.py
+
+capabilities:
+  - analytics.ga4.read
+
+tools:
+  - ga4
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: AnalyticsInput
+output_schema: AnalyticsOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  reasoning: medium
+  temperature: 0.1
+  deterministic_fallback: true
+
+prompt: agents/analytics/ga4
+tags:
+  - analytics

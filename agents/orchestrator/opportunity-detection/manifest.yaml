@@ -1,0 +1,38 @@
+id: OPP-001
+name: Opportunity Detection Agent
+version: 1.0.0
+
+description: >
+  Turns observed findings from every upstream stage into evidence-backed
+  opportunities. An opportunity with no supporting observation is not
+  created.
+
+module: agent.py
+
+capabilities:
+  - opportunity.detect
+
+tools:
+  - memory
+
+memory_scopes:
+  - brand
+  - mission
+
+risk_level: low
+
+input_schema: OpportunityDetectionInput
+output_schema: OpportunityDetectionOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  reasoning: medium
+  temperature: 0.1
+  deterministic_fallback: true
+
+prompt: agents/orchestrator/opportunity-detection
+tags:
+  - decision

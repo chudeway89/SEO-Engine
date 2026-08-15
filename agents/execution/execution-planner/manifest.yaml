@@ -1,0 +1,45 @@
+id: EXE-001
+name: Execution Agent
+version: 1.0.0
+
+description: >
+  Turns approved recommendations into concrete actions through the
+  integration layer. It proposes; the policy engine and a human decide. It
+  executes only what has been approved.
+
+module: agent.py
+
+capabilities:
+  - execution.plan
+  - cms.draft
+
+tools:
+  - cms
+  - memory
+
+memory_scopes:
+  - brand
+  - mission
+
+risk_level: medium
+
+input_schema: ExecutionPlanInput
+output_schema: ExecutionPlanOutput
+
+autonomous_actions:
+  - content.create
+
+approval_required_for:
+  - cms.create_draft
+  - cms.publish
+  - seo.metadata_update
+  - content.update
+
+model_policy:
+  reasoning: high
+  temperature: 0.1
+  deterministic_fallback: true
+
+prompt: agents/execution/execution-planner
+tags:
+  - execution

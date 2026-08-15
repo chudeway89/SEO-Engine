@@ -1,0 +1,41 @@
+id: SEO-003
+name: Keyword Intelligence Agent
+version: 1.0.0
+
+description: >
+  Discovers, expands, normalises, deduplicates, classifies, clusters and
+  scores search opportunities from the brand graph and observed Search
+  Console queries. It never invents search volume.
+
+module: agent.py
+
+capabilities:
+  - seo.keyword.research
+  - seo.keyword.cluster
+  - seo.search.intent
+
+tools:
+  - gsc
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: KeywordResearchInput
+output_schema: KeywordResearchOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  reasoning: medium
+  temperature: 0.1
+  deterministic_fallback: true
+
+prompt: agents/seo/keyword-intelligence
+tags:
+  - seo
+  - research

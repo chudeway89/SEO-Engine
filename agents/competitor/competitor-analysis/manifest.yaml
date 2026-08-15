@@ -1,0 +1,39 @@
+id: CMP-002
+name: Competitor Analysis Agent
+version: 1.0.0
+
+description: >
+  Crawls recorded competitors within the same safeguards, compares topical
+  coverage and identifies keyword and content gaps. A business competitor is
+  only promoted to a search competitor on observation.
+
+module: agent.py
+
+capabilities:
+  - competitor.analyse
+  - website.crawl
+
+tools:
+  - crawler
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: CompetitorAnalysisInput
+output_schema: CompetitorAnalysisOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  reasoning: medium
+  temperature: 0.1
+  deterministic_fallback: true
+
+prompt: agents/competitor/competitor-analysis
+tags:
+  - competitor

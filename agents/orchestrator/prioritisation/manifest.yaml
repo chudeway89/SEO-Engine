@@ -1,0 +1,38 @@
+id: PRI-001
+name: Opportunity Prioritisation Agent
+version: 1.0.0
+
+description: >
+  Ranks opportunities using the documented internal model: impact x
+  confidence x strategic fit / effort. It states plainly that this is not a
+  Google ranking formula.
+
+module: agent.py
+
+capabilities:
+  - opportunity.prioritise
+
+tools:
+  - memory
+
+memory_scopes:
+  - brand
+  - mission
+
+risk_level: low
+
+input_schema: PrioritisationInput
+output_schema: PrioritisationOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  reasoning: medium
+  temperature: 0.1
+  deterministic_fallback: true
+
+prompt: agents/orchestrator/prioritisation
+tags:
+  - decision

@@ -1,0 +1,38 @@
+id: ANA-001
+name: Search Console Analytics Agent
+version: 1.0.0
+
+description: >
+  Syncs and analyses Search Console performance, finding queries with
+  recoverable positions. Reports nothing when the integration is not
+  connected rather than estimating.
+
+module: agent.py
+
+capabilities:
+  - analytics.gsc.read
+
+tools:
+  - gsc
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: SearchConsoleInput
+output_schema: SearchConsoleOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  reasoning: medium
+  temperature: 0.1
+  deterministic_fallback: true
+
+prompt: agents/analytics/search-console
+tags:
+  - analytics

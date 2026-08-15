@@ -1,0 +1,41 @@
+id: SEO-001
+name: Technical SEO Agent
+version: 1.0.0
+
+description: >
+  Crawls a website within its safeguards and runs the deterministic
+  technical and on-page checks, producing dimension scores and evidence-
+  backed findings. It diagnoses; it never guesses.
+
+module: agent.py
+
+capabilities:
+  - seo.audit
+  - website.crawl
+  - seo.indexability
+
+tools:
+  - crawler
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: TechnicalAuditInput
+output_schema: TechnicalAuditOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  reasoning: medium
+  temperature: 0.1
+  deterministic_fallback: true
+
+prompt: agents/seo/technical-seo
+tags:
+  - seo
+  - technical
