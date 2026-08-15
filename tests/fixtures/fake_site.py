@@ -240,6 +240,114 @@ def make_app(*, robots_body: str = ROBOTS, robots_status: int = 200):
     return app
 
 
+# ---------------------------------------------------------------------------
+# A competitor site, for competitor analysis and content gap work.
+# ---------------------------------------------------------------------------
+COMPETITOR_BASE = "https://rival.test"
+
+COMPETITOR_ROBOTS = "User-agent: *\nAllow: /\n"
+
+COMPETITOR_PAGES: dict[str, str] = {
+    "/": _page(
+        "Rival Diagnostics — genetic testing",
+        """
+        <nav>
+          <a href="/services/dna-testing">DNA testing</a>
+          <a href="/guides/dna-testing-cost">How much does a DNA test cost?</a>
+          <a href="/guides/prenatal-screening-explained">Prenatal screening explained</a>
+          <a href="/locations/manchester">Manchester clinic</a>
+        </nav>
+        """
+        + _FILLER,
+        h1="Genetic testing you can trust",
+    ),
+    "/services/dna-testing": _page("DNA testing — Rival Diagnostics", _FILLER, h1="DNA testing"),
+    "/guides/dna-testing-cost": _page(
+        "How much does a DNA test cost? — Rival Diagnostics",
+        _FILLER,
+        h1="How much does a DNA test cost?",
+    ),
+    "/guides/prenatal-screening-explained": _page(
+        "Prenatal screening explained — Rival Diagnostics",
+        _FILLER,
+        h1="Prenatal screening explained",
+    ),
+    "/locations/manchester": _page(
+        "DNA testing in Manchester — Rival Diagnostics",
+        _FILLER,
+        h1="DNA testing in Manchester",
+    ),
+}
+
+
+def make_competitor_app():
+    async def app(scope, receive, send):
+        path = scope["path"]
+
+        async def respond(status: int, body: str, content_type: str = "text/html; charset=utf-8"):
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": status,
+                    "headers": [(b"content-type", content_type.encode())],
+                }
+            )
+            await send({"type": "http.response.body", "body": body.encode()})
+
+        if path == "/robots.txt":
+            await respond(200, COMPETITOR_ROBOTS, "text/plain")
+            return
+        body = COMPETITOR_PAGES.get(path)
+        if body is None:
+            await respond(404, _page("Not found", "<p>Nothing here.</p>", h1="Not found"))
+            return
+        await respond(200, body)
+
+    return app
+
+
+def make_web(**extra_hosts):
+    """One ASGI app serving several hosts, dispatched on the Host header.
+
+    The crawler issues absolute URLs, so this is what lets a single in-process
+    transport serve both the brand's site and its competitors' sites.
+    """
+    hosts = {"acme.test": make_app(), "rival.test": make_competitor_app()}
+    hosts.update(extra_hosts)
+
+    async def app(scope, receive, send):
+        headers = dict(scope.get("headers") or [])
+        host = headers.get(b"host", b"").decode().split(":")[0]
+        if not host and scope.get("server"):
+            host = scope["server"][0]
+        target = hosts.get(host)
+        if target is None:
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 404,
+                    "headers": [(b"content-type", b"text/plain")],
+                }
+            )
+            await send({"type": "http.response.body", "body": f"no host {host}".encode()})
+            return
+        await target(scope, receive, send)
+
+    return app
+
+
+@asynccontextmanager
+async def build_web_client():
+    """A client that can reach every host in the fake web."""
+    transport = httpx.ASGITransport(app=make_web())
+    async with httpx.AsyncClient(
+        transport=transport,
+        follow_redirects=True,
+        headers={"User-Agent": "SEOEngineBot/0.1 (+https://seo-engine.local/bot)"},
+    ) as client:
+        yield client
+
+
 @asynccontextmanager
 async def build_client(*, robots_body: str = ROBOTS, robots_status: int = 200):
     """An httpx client wired to the in-process site."""
@@ -255,4 +363,16 @@ async def build_client(*, robots_body: str = ROBOTS, robots_status: int = 200):
         yield client
 
 
-__all__ = ["BASE", "ROBOTS", "SITEMAP", "SITE_PAGES", "build_client", "make_app"]
+__all__ = [
+    "BASE",
+    "COMPETITOR_BASE",
+    "COMPETITOR_PAGES",
+    "ROBOTS",
+    "SITEMAP",
+    "SITE_PAGES",
+    "build_client",
+    "build_web_client",
+    "make_app",
+    "make_competitor_app",
+    "make_web",
+]

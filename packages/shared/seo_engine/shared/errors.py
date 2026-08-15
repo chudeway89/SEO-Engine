@@ -119,6 +119,17 @@ class CrawlError(SEOEngineError):
     http_status = 502
 
 
+class ConfigurationError(SEOEngineError):
+    """The deployment is configured for something it cannot actually do.
+
+    Raised rather than degrading silently: a caller who configured durable
+    orchestration must not be handed best-effort orchestration instead.
+    """
+
+    code = "CONFIGURATION_ERROR"
+    http_status = 503
+
+
 class NonRetryableError(SEOEngineError):
     """Marker mixin base: retry helpers must never re-attempt these."""
 
@@ -126,6 +137,7 @@ class NonRetryableError(SEOEngineError):
 
 
 NON_RETRYABLE_ERRORS: tuple[type[Exception], ...] = (
+    ConfigurationError,
     ValidationError,
     AuthenticationError,
     AuthorizationError,

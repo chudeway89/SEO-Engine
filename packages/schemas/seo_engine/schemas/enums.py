@@ -52,6 +52,9 @@ class TaskStatus(StrEnum):
     READY = "ready"
     RUNNING = "running"
     WAITING = "waiting"
+    #: Failed, but within its attempt limit: eligible to run again. Distinct
+    #: from FAILED so a retryable failure is never read as a final one.
+    RETRY = "retry"
     BLOCKED = "blocked"
     REQUIRES_APPROVAL = "requires_approval"
     COMPLETED = "completed"

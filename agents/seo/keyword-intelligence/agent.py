@@ -107,9 +107,9 @@ class KeywordIntelligenceAgent(BaseAgent):
             )
 
         clusters = cluster_keywords(records)
-        keywords_service = context.services.get("keywords")
-        if keywords_service is not None:
-            await keywords_service.store(payload.brand_id, records, clusters)
+        search_service = context.services.get("search")
+        if search_service is not None:
+            await search_service.store(payload.brand_id, records, clusters)
 
         # --- evidence ---------------------------------------------------------
         seed_evidence = workspace.observe(

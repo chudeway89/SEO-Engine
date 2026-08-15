@@ -88,6 +88,17 @@ from seo_engine.domain.models.mission import (
     TaskDependency,
 )
 from seo_engine.domain.models.observability import AuditLog, EventRecord
+from seo_engine.domain.models.search import (
+    Keyword,
+    KeywordCluster,
+    KeywordMetricRecord,
+    KeywordRanking,
+    KeywordVariant,
+    SearchIntentRecord,
+    SearchQuestionRecord,
+    SERPResultRecord,
+    SERPSnapshotRecord,
+)
 from seo_engine.domain.models.website import (
     CrawlJob,
     CrawlPageRecord,
@@ -148,6 +159,11 @@ __all__ = [
     "GSCSitemap",
     "IntegrationConnection",
     "IntegrationCredential",
+    "Keyword",
+    "KeywordCluster",
+    "KeywordMetricRecord",
+    "KeywordRanking",
+    "KeywordVariant",
     "KnowledgeEdge",
     "KnowledgeNode",
     "LLMUsage",
@@ -168,6 +184,10 @@ __all__ = [
     "ProviderRawResponse",
     "Recommendation",
     "RoleDefinition",
+    "SERPResultRecord",
+    "SERPSnapshotRecord",
+    "SearchIntentRecord",
+    "SearchQuestionRecord",
     "SubscriptionPlan",
     "Task",
     "TaskDependency",

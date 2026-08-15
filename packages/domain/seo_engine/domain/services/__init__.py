@@ -10,6 +10,8 @@ from seo_engine.domain.services.brand import BrandService_ as BrandService
 from seo_engine.domain.services.decision import DecisionService
 from seo_engine.domain.services.identity import IdentityService, RegistrationResult
 from seo_engine.domain.services.integration import IntegrationService
+from seo_engine.domain.services.mission import MissionService
+from seo_engine.domain.services.search import SearchService
 from seo_engine.domain.services.website import WebsiteService
 
 __all__ = [
@@ -17,6 +19,8 @@ __all__ = [
     "DecisionService",
     "IdentityService",
     "IntegrationService",
+    "MissionService",
     "RegistrationResult",
+    "SearchService",
     "WebsiteService",
 ]

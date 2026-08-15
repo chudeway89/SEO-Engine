@@ -278,6 +278,11 @@ class MissionService:
             ],
         }
 
+    async def stage_map(self, mission_id: uuid.UUID) -> dict[uuid.UUID, str]:
+        """task_id → stage, for a workflow that needs to know which stage it is running."""
+        links = await self.mission_tasks.list(MissionTask.mission_id == mission_id)
+        return {link.task_id: link.stage for link in links}
+
     async def ready_tasks(self, mission_id: uuid.UUID) -> list[Task]:
         """Tasks whose dependencies have all completed."""
         tasks = await self.tasks_for(mission_id)

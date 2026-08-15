@@ -26,14 +26,21 @@ risk_level: medium
 input_schema: ExecutionPlanInput
 output_schema: ExecutionPlanOutput
 
+# Creating an internal draft record changes nothing a visitor can see, so it is
+# the only thing this agent may do without an approval. Everything that touches
+# the live site is listed below and cannot be executed until a human approves.
 autonomous_actions:
   - content.create
 
 approval_required_for:
   - cms.create_draft
+  - cms.update_draft
   - cms.publish
-  - seo.metadata_update
   - content.update
+  - seo.metadata_update
+  - seo.internal_link_add
+  - seo.schema_update
+  - seo.redirect_create
 
 model_policy:
   reasoning: high
