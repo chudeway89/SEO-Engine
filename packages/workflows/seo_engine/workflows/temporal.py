@@ -16,6 +16,7 @@ tampered workflow argument cannot escalate what an agent may do.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
@@ -312,7 +313,12 @@ class MissionTemporalWorkflow:
         return report
 
 
-ACTIVITIES = [plan_mission, next_ready_tasks, run_stage, finalise_mission]
+ACTIVITIES: Sequence[Callable[..., Any]] = [
+    plan_mission,
+    next_ready_tasks,
+    run_stage,
+    finalise_mission,
+]
 WORKFLOWS = [MissionTemporalWorkflow]
 
 

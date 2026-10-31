@@ -136,7 +136,7 @@ class WebsiteCrawler:
             parser = PageParser(
                 allowed_domains=allowed, include_subdomains=self.config.include_subdomains
             )
-            state = {"fetched": 0, "stopped": None}
+            state: dict[str, Any] = {"fetched": 0, "stopped": None}
             lock = asyncio.Lock()
 
             async def worker() -> None:

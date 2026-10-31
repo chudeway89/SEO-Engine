@@ -18,11 +18,11 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar, cast
 
 from seo_engine.shared.db import Base, bind_tenant, bound_tenant
 from seo_engine.shared.errors import NotFoundError, TenantIsolationError, ValidationError
-from sqlalchemy import Select, delete, func, select, update
+from sqlalchemy import CursorResult, Select, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 ModelT = TypeVar("ModelT", bound=Base)
@@ -58,8 +58,14 @@ class TenantScopedRepository(Generic[ModelT]):
             )
         return column
 
-    def select(self) -> Select[tuple[ModelT]]:
-        """A SELECT already narrowed to this tenant."""
+    def select(self) -> Select[Any]:
+        """A SELECT already narrowed to this tenant.
+
+        Typed as ``Select[Any]`` rather than ``Select[tuple[ModelT]]``: SQLAlchemy's
+        generic ``select()`` overloads do not flow a bound TypeVar through a generic
+        repository, and the precise element type is recovered by ``.scalars()`` at
+        each call site. The runtime is exact and covered by the isolation tests.
+        """
         return select(self.model).where(self._tenant_column == self.tenant_id)
 
     def scoped(self, statement: Select[Any]) -> Select[Any]:
@@ -68,7 +74,11 @@ class TenantScopedRepository(Generic[ModelT]):
 
     # -- reads -----------------------------------------------------------
     async def get(self, entity_id: uuid.UUID) -> ModelT | None:
-        result = await self.session.execute(self.select().where(self.model.id == entity_id))
+        # `id` is declared on every concrete model via UUIDPrimaryKeyMixin, not on
+        # the Base the TypeVar is bound to.
+        result = await self.session.execute(
+            self.select().where(self.model.id == entity_id)  # type: ignore[attr-defined]
+        )
         return result.scalar_one_or_none()
 
     async def get_or_raise(self, entity_id: uuid.UUID) -> ModelT:
@@ -152,12 +162,12 @@ class TenantScopedRepository(Generic[ModelT]):
             .values(**values)
         )
         result = await self.session.execute(statement)
-        return int(result.rowcount or 0)
+        return int(cast("CursorResult[Any]", result).rowcount or 0)
 
     async def delete_where(self, *criteria: Any) -> int:
         statement = delete(self.model).where(self._tenant_column == self.tenant_id, *criteria)
         result = await self.session.execute(statement)
-        return int(result.rowcount or 0)
+        return int(cast("CursorResult[Any]", result).rowcount or 0)
 
     async def delete(self, entity: ModelT) -> None:
         if getattr(entity, "tenant_id", None) != self.tenant_id:
@@ -189,7 +199,9 @@ class PlatformRepository(Generic[ModelT]):
             )
 
     async def get(self, entity_id: uuid.UUID) -> ModelT | None:
-        result = await self.session.execute(select(self.model).where(self.model.id == entity_id))
+        result = await self.session.execute(
+            select(self.model).where(self.model.id == entity_id)  # type: ignore[attr-defined]
+        )
         return result.scalar_one_or_none()
 
     async def find_one(self, *criteria: Any) -> ModelT | None:

@@ -138,7 +138,7 @@ class MissionService:
         self.principal.require(P_MISSION_READ)
         return await self.missions.get_or_raise(mission_id)
 
-    async def list(self, brand_id: uuid.UUID, *, limit: int = 50) -> list[Mission]:
+    async def list_missions(self, brand_id: uuid.UUID, *, limit: int = 50) -> list[Mission]:
         self.principal.require(P_MISSION_READ)
         return list(
             await self.missions.list(

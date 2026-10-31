@@ -14,9 +14,12 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from jose import JWTError, jwt
+
+if TYPE_CHECKING:
+    from seo_engine.permissions.rbac import Principal
 from passlib.context import CryptContext
 from seo_engine.shared.config import get_settings
 from seo_engine.shared.errors import AuthenticationError, ValidationError
@@ -173,7 +176,7 @@ class AuthProvider(ABC):
     name: str
 
     @abstractmethod
-    async def authenticate(self, credential: str) -> Principal:  # noqa: F821
+    async def authenticate(self, credential: str) -> Principal:
         """Turn a bearer credential into a principal, or raise."""
 
     @abstractmethod
@@ -186,7 +189,7 @@ class AuthProvider(ABC):
 class JWTAuthProvider(AuthProvider):
     name = "jwt"
 
-    async def authenticate(self, credential: str) -> Principal:  # noqa: F821
+    async def authenticate(self, credential: str) -> Principal:
         from seo_engine.permissions.rbac import Principal
 
         payload = decode_token(credential, expected_type="access")

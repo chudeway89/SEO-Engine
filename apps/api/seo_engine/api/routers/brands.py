@@ -127,7 +127,7 @@ async def list_brands(
     session: SessionDep, principal: PrincipalDep, page: PageDep, request: Request
 ) -> dict:
     service = _service(session, principal)
-    brands = await service.list(limit=page.limit, offset=page.offset)
+    brands = await service.list_brands(limit=page.limit, offset=page.offset)
     total = await service.count()
     return envelope(
         [serialize.brand(b) for b in brands],

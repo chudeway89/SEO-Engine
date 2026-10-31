@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from typing import Any
 
 from seo_engine.domain.models.brand import (
@@ -121,7 +122,7 @@ class BrandService_:
         self.principal.require(P_BRAND_READ)
         return await self.brands.get_or_raise(brand_id)
 
-    async def list(self, *, limit: int = 50, offset: int = 0) -> list[Brand]:
+    async def list_brands(self, *, limit: int = 50, offset: int = 0) -> list[Brand]:
         self.principal.require(P_BRAND_READ)
         rows = await self.brands.list(limit=limit, offset=offset, order_by=Brand.created_at.desc())
         return list(rows)
@@ -230,7 +231,7 @@ class BrandService_:
         *,
         name: str,
         domain: str,
-        competitor_types: list[CompetitorType | str] | None = None,
+        competitor_types: Sequence[CompetitorType | str] | None = None,
         priority: int = 3,
         discovered_via: str = "user",
         notes: str = "",
@@ -386,7 +387,7 @@ class BrandService_:
         self.principal.require(P_BRAND_READ)
         brand = await self.brands.get_or_raise(brand_id)
 
-        async def children(model: type, order: Any = None) -> list[Any]:
+        async def children(model: Any, order: Any = None) -> list[Any]:
             repo = await self._child_repo(model)
             return list(await repo.list(model.brand_id == brand_id, order_by=order))
 

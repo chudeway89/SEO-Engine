@@ -16,6 +16,7 @@ from contextvars import ContextVar, Token
 from typing import Any
 
 import structlog
+from structlog.typing import EventDict, WrappedLogger
 
 # Default is None rather than {} so the sentinel can never be mutated in place.
 _LOG_CONTEXT: ContextVar[dict[str, Any] | None] = ContextVar("seo_engine_log_context", default=None)
@@ -42,14 +43,14 @@ REDACTED_KEYS = frozenset(
 _REDACTED = "[redacted]"
 
 
-def _redact(_logger: Any, _name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+def _redact(_logger: WrappedLogger, _name: str, event_dict: EventDict) -> EventDict:
     for key in list(event_dict):
         if key.lower() in REDACTED_KEYS:
             event_dict[key] = _REDACTED
     return event_dict
 
 
-def _merge_context(_logger: Any, _name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+def _merge_context(_logger: WrappedLogger, _name: str, event_dict: EventDict) -> EventDict:
     for key, value in (_LOG_CONTEXT.get() or {}).items():
         event_dict.setdefault(key, value)
     return event_dict

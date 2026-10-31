@@ -104,7 +104,7 @@ def stage_inputs(
 def _upstream_keywords(outputs: dict[str, dict[str, Any]]) -> list[str]:
     research = outputs.get("keyword_research", {}).get("keyword_research", {})
     keywords = [
-        row.get("keyword")
+        str(row["keyword"])
         for row in research.get("top_keywords", [])
         if isinstance(row, dict) and row.get("keyword")
     ]

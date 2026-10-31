@@ -32,7 +32,12 @@ from seo_engine.domain.models.integrations import (
 )
 from seo_engine.domain.repositories import repository_for
 from seo_engine.events.bus import emit
-from seo_engine.integrations.base import ProviderAdapter, ProviderResponse
+from seo_engine.integrations.base import (
+    AnalyticsAdapter,
+    ProviderAdapter,
+    ProviderResponse,
+    SearchConsoleAdapter,
+)
 from seo_engine.integrations.cms.adapters import DevelopmentCMSAdapter, WordPressAdapter
 from seo_engine.integrations.google.analytics import (
     LIKELY_LEAD_EVENTS,
@@ -324,6 +329,7 @@ class IntegrationService:
         connection, adapter = await self.require_adapter(
             brand_id, IntegrationProvider.GOOGLE_SEARCH_CONSOLE
         )
+        assert isinstance(adapter, SearchConsoleAdapter)  # provider dictates the adapter type
         synthetic = connection.mode == IntegrationMode.DEVELOPMENT_ADAPTER.value
         provenance = DataProvenance.SYNTHETIC_DEMO if synthetic else DataProvenance.OBSERVED
 
@@ -492,6 +498,7 @@ class IntegrationService:
         connection, adapter = await self.require_adapter(
             brand_id, IntegrationProvider.GOOGLE_ANALYTICS_4
         )
+        assert isinstance(adapter, AnalyticsAdapter)  # provider dictates the adapter type
         synthetic = connection.mode == IntegrationMode.DEVELOPMENT_ADAPTER.value
         provenance = DataProvenance.SYNTHETIC_DEMO if synthetic else DataProvenance.OBSERVED
 

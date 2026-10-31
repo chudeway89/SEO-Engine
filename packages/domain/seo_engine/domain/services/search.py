@@ -60,12 +60,12 @@ class SearchService:
 
         cluster_ids: dict[str, uuid.UUID] = {}
         for cluster in clusters:
-            existing = await self.clusters.find_one(
+            existing_cluster = await self.clusters.find_one(
                 KeywordClusterRow.brand_id == brand_id,
                 KeywordClusterRow.head_keyword == cluster.head_keyword,
             )
-            if existing is None:
-                existing = self.clusters.add(
+            if existing_cluster is None:
+                existing_cluster = self.clusters.add(
                     KeywordClusterRow(
                         brand_id=brand_id,
                         label=cluster.label,
@@ -84,11 +84,11 @@ class SearchService:
                 )
                 await self.session.flush()
             else:
-                existing.label = cluster.label
-                existing.intent = cluster.intent.as_dict()
-                existing.keyword_count = len(cluster.keywords)
-                existing.opportunity_score = cluster.opportunity_score
-            cluster_ids[cluster.id] = existing.id
+                existing_cluster.label = cluster.label
+                existing_cluster.intent = cluster.intent.as_dict()
+                existing_cluster.keyword_count = len(cluster.keywords)
+                existing_cluster.opportunity_score = cluster.opportunity_score
+            cluster_ids[cluster.id] = existing_cluster.id
 
         stored = 0
         for record in records:

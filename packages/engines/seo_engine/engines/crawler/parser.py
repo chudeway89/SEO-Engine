@@ -188,7 +188,7 @@ class PageParser:
             if key in seen:
                 continue
             seen.add(key)
-            rel_attr = tag.get("rel") or []
+            rel_attr: Any = tag.get("rel") or []
             rel = [r.lower() for r in (rel_attr if isinstance(rel_attr, list) else [rel_attr])]
             links.append(
                 Link(
@@ -260,7 +260,7 @@ class PageParser:
             for item in parsed if isinstance(parsed, list) else [parsed]:
                 if isinstance(item, dict):
                     blocks.append({"_format": "json-ld", **item})
-        for tag in soup.find_all(attrs={"itemscope": True}):
+        for tag in soup.find_all(attrs={"itemscope": True}):  # type: ignore[call-overload]
             item_type = tag.get("itemtype")
             if item_type:
                 blocks.append({"_format": "microdata", "@type": str(item_type).split("/")[-1]})
@@ -288,13 +288,24 @@ class PageParser:
         links = soup.find_all("a", href=True)
         named_links = sum(1 for a in links if _accessible_name(a))
 
-        controls = soup.find_all(["input", "select", "textarea"])
-        controls = [c for c in controls if str(c.get("type", "")).lower() != "hidden"]
+        all_controls = soup.find_all(["input", "select", "textarea"])
+        controls = [c for c in all_controls if str(c.get("type", "")).lower() != "hidden"]
         labelled = sum(1 for c in controls if _has_label(soup, c))
 
         images = soup.find_all("img")
         landmarks = [tag for tag in _LANDMARK_TAGS if soup.find(tag)]
         scripts = soup.find_all("script")
+
+        # bs4's stubs reject attrs={...: bool} filters that are correct at
+        # runtime; these are hoisted so the ignore sits on one plain statement.
+        role_tags: Any = soup.find_all(attrs={"role": True})  # type: ignore[call-overload]
+        tabindex_tags: Any = soup.find_all(attrs={"tabindex": True})  # type: ignore[call-overload]
+        main_landmark = soup.find("main") or soup.find(attrs={"role": "main"})  # type: ignore[call-overload]
+        tabindex_positive = sum(
+            1
+            for t in tabindex_tags
+            if _int_or_none(t.get("tabindex")) is not None and int(t["tabindex"]) > 0
+        )
 
         return AccessibilitySignals(
             semantic_landmarks=landmarks,
@@ -307,17 +318,11 @@ class PageParser:
             form_controls_labelled=labelled,
             images_total=len(images),
             images_with_alt=sum(1 for i in images if i.get("alt") is not None),
-            has_main_landmark=bool(soup.find("main") or soup.find(attrs={"role": "main"})),
+            has_main_landmark=bool(main_landmark),
             has_skip_link=any("skip" in _clean(a.get_text()).lower()[:40] for a in links[:5]),
             heading_order_valid=_heading_order_valid(soup),
-            aria_roles=sorted(
-                {str(t["role"]).lower() for t in soup.find_all(attrs={"role": True})}
-            ),
-            tabindex_positive_count=sum(
-                1
-                for t in soup.find_all(attrs={"tabindex": True})
-                if _int_or_none(t.get("tabindex")) and int(t["tabindex"]) > 0
-            ),
+            aria_roles=sorted({str(t["role"]).lower() for t in role_tags}),
+            tabindex_positive_count=tabindex_positive,
             script_tags=len(scripts),
             noscript_present=bool(soup.find("noscript")),
             body_text_chars=len(text),
@@ -335,7 +340,7 @@ def _has_rel(tag: Tag, value: str) -> bool:
     to an attribute filter, so a naive ``rel=lambda v: value in v`` silently
     matches nothing.  Normalising here avoids that trap.
     """
-    rel = tag.get("rel") or []
+    rel: Any = tag.get("rel") or []
     tokens = rel if isinstance(rel, list) else str(rel).split()
     return value.lower() in {str(token).lower() for token in tokens}
 

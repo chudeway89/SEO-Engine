@@ -164,7 +164,9 @@ class AnthropicProvider(LLMProvider):
 
         started = time.perf_counter()
         try:
-            response = await client.messages.create(
+            # The conversation dicts match Anthropic's MessageParam shape at
+            # runtime; the SDK's overloads do not accept a plain list[dict].
+            response = await client.messages.create(  # type: ignore[call-overload]
                 model=model,
                 max_tokens=max_tokens,
                 temperature=temperature,

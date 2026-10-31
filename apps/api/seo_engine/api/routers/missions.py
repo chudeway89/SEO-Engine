@@ -119,7 +119,7 @@ async def list_missions(
     page: PageDep,
     request: Request,
 ) -> dict:
-    rows = await MissionService(session, principal).list(brand_id, limit=page.limit)
+    rows = await MissionService(session, principal).list_missions(brand_id, limit=page.limit)
     return envelope(
         [serialize.mission(m) for m in rows],
         meta=page_meta(rows, limit=page.limit, offset=0),

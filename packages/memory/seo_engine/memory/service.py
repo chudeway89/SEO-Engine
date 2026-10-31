@@ -9,9 +9,10 @@ hand-written SQL path is exactly where isolation bugs hide.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any
+from typing import Any, cast
 
 from seo_engine.domain.models.memory import Memory, MemoryEmbedding
 from seo_engine.domain.repositories import repository_for
@@ -20,7 +21,7 @@ from seo_engine.observability.logging import get_logger
 from seo_engine.schemas.enums import MemoryScope, MemoryType
 from seo_engine.shared.errors import ValidationError
 from seo_engine.shared.ids import utcnow
-from sqlalchemy import select, text
+from sqlalchemy import CursorResult, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 log = get_logger(__name__)
@@ -198,11 +199,11 @@ class MemoryService:
     def _scope_filters(
         self,
         *,
-        scopes: list[MemoryScope | str] | None,
+        scopes: Sequence[MemoryScope | str] | None,
         brand_id: uuid.UUID | None,
         mission_id: uuid.UUID | None,
         task_id: uuid.UUID | None,
-        memory_types: list[MemoryType | str] | None,
+        memory_types: Sequence[MemoryType | str] | None,
     ) -> list[Any]:
         criteria: list[Any] = [Memory.is_active.is_(True)]
         if scopes:
@@ -222,11 +223,11 @@ class MemoryService:
     async def retrieve(
         self,
         *,
-        scopes: list[MemoryScope | str] | None = None,
+        scopes: Sequence[MemoryScope | str] | None = None,
         brand_id: uuid.UUID | None = None,
         mission_id: uuid.UUID | None = None,
         task_id: uuid.UUID | None = None,
-        memory_types: list[MemoryType | str] | None = None,
+        memory_types: Sequence[MemoryType | str] | None = None,
         key: str | None = None,
         limit: int = 50,
     ) -> list[Memory]:
@@ -247,8 +248,8 @@ class MemoryService:
         query: str,
         *,
         brand_id: uuid.UUID | None = None,
-        scopes: list[MemoryScope | str] | None = None,
-        memory_types: list[MemoryType | str] | None = None,
+        scopes: Sequence[MemoryScope | str] | None = None,
+        memory_types: Sequence[MemoryType | str] | None = None,
         limit: int = 10,
         min_similarity: float = 0.05,
     ) -> list[MemoryHit]:
@@ -379,7 +380,7 @@ async def sweep_expired_memory(session: AsyncSession) -> int:
         {"now": now},
     )
     await session.flush()
-    return int(result.rowcount or 0)
+    return int(cast("CursorResult[Any]", result).rowcount or 0)
 
 
 __all__ = ["DEFAULT_TTL", "MemoryHit", "MemoryService", "sweep_expired_memory"]
