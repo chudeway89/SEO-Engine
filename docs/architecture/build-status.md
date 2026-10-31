@@ -18,7 +18,9 @@ and produces evidence-backed, approval-gated recommendations. This is covered by
 runtime, crawler, engines and database with nothing mocked but the network.
 
 **345 tests pass** (unit, integration, security, agent, workflow and migration),
-`ruff` is clean, and the API, worker, Docker stack, seed and operator CLI exist.
+`ruff` is clean, `mypy` reports no issues across 106 source files, and the API,
+worker, Docker stack, seed and operator CLI exist. The Next.js web application is
+built and was verified end to end through a real browser.
 
 What has deliberately *not* happened, throughout: no placeholder UI, no mocked
 dashboards, no fabricated metrics, no empty agent directories created to look
@@ -47,11 +49,11 @@ it appears.
 | 17 | Policy and approval engine | **Done** — rule evaluation, the automation-policy deferral, the approval matrix |
 | 18 | Action execution framework | **Done** — policy-gated actions, draft-first CMS, outcome records |
 | 19 | Workflows | **Done** — the mission workflow, the local engine, and the Temporal engine + worker |
-| 20 | Web application | **In progress** — see the frontend task; the API it consumes is complete |
+| 20 | Web application | **Done** — a Next.js app, built and verified end to end through a real browser |
 | 21 | End-to-end mission | **Done** — the canonical mission runs and is asserted end to end |
 | 22 | Test suites | **Done** — unit, integration, security, agent, workflow, migration (345 tests) |
 | 23 | Security hardening | **Done** — isolation, injection boundary, no-fabrication, chain-of-thought and approval all enforced and tested |
-| 24 | Documentation and QA gate | **Done** — README, ARCHITECTURE, AGENTS, SECURITY, INTEGRATIONS, CONTRIBUTING, DEPLOYMENT, docs/api, per-agent docs, `make gate` |
+| 24 | Documentation and QA gate | **Done** — the docs, `docs/api`, per-agent docs, and `make gate` (lint + typecheck + full suite, all green) |
 
 ---
 
@@ -69,8 +71,6 @@ exercises.
 
 ## Honest gaps
 
-- The **web application** (Phase 20) is the remaining build item. The API,
-  envelope, auth and every endpoint it needs are complete and tested.
 - **Production integration credentials** are not bundled (they must not be):
   without them the Google integrations run in development-adapter mode, which is
   labelled synthetic throughout. The production adapters are implemented and
@@ -78,3 +78,6 @@ exercises.
 - The **agent evaluation golden datasets** referenced by some agent READMEs are
   a growing set; the behavioural assertions live in the agent and integration
   tests today.
+- The **full agent catalogue** is larger than the eleven MVP agents built here;
+  the eleven are the set the canonical mission exercises, and more plug in behind
+  the same runtime without new infrastructure.

@@ -41,7 +41,7 @@ test-fast: ## Unit tests only (no database)
 security: ## Security regression tests only
 	$(PYTEST) -q -m security
 
-gate: lint test ## The MVP quality gate: lint + full suite
+gate: lint typecheck test ## The MVP quality gate: lint + typecheck + full suite
 
 run: ## Run the API locally with reload
 	$(PYTHON) -m uvicorn seo_engine.api.main:app --reload
