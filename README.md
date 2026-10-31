@@ -11,12 +11,14 @@ PRIORITISE → RECOMMEND → APPROVE → ACT → MEASURE → LEARN → MEMORY �
 ```
 
 > **Build status:** this repository currently contains the verified foundation
-> (Phases 1–2 of the build plan): repository and tooling, the complete database
-> schema with a migration history, the core typed contracts, and the
-> prompt-injection trust boundary. The agent runtime, engines, integrations,
-> API and web application are **not yet implemented**.
+> **Build status:** the agentic operating system is built and runs the
+> canonical mission end to end — plan a task graph, execute each stage through
+> the Agent Runtime against a real crawl, measure a baseline, and produce
+> evidence-backed, approval-gated recommendations. 345 tests pass against a real
+> PostgreSQL + pgvector database. The remaining build item is the Next.js web
+> application; the API it consumes is complete.
 > See [`docs/architecture/build-status.md`](docs/architecture/build-status.md)
-> for a precise, per-phase account of what exists and what does not.
+> for a precise, per-phase account.
 
 ---
 
@@ -24,47 +26,65 @@ PRIORITISE → RECOMMEND → APPROVE → ACT → MEASURE → LEARN → MEMORY �
 
 | Area | State | Verification |
 | --- | --- | --- |
-| Monorepo layout, `uv`/`pnpm` tooling, `.env.example` | Done | `uv pip install -e ".[dev]"` |
-| Typed configuration (`Settings`) | Done | imported by every module; no `os.environ` reads elsewhere |
-| Domain error hierarchy → API error contract | Done | unit tests |
-| Core Pydantic v2 contracts (agent manifest/context/result, evidence, crawl, SEO, search, content, events, API envelope) | Done | 21 contract tests |
-| PostgreSQL schema: **75 tables** across 11 domains | Done | applied to PostgreSQL 16 |
-| Alembic migration chain `0001_identity` … `0011_events_audit` | Done | clean `upgrade head` on an empty DB, clean `downgrade base` |
-| pgvector-backed memory tables | Done | extension created by `0001`, `VECTOR(384)` column live |
-| Tenant isolation primitives (`TenantOwnedMixin`, session flush guard) | Done | integration test asserts cross-tenant write raises `TenantIsolationError` |
-| Prompt-injection trust boundary (`UntrustedContent`) | Done | 8 security tests covering the attack strings named in the specification |
+| Monorepo, tooling, `.env.example`, Docker stack, Makefile, `seo-engine` CLI | Done | `make install`, `docker compose config` |
+| Typed configuration (`Settings`) | Done | every module reads it; no stray `os.environ` |
+| PostgreSQL schema: **85 tables** across 11 domains + Alembic chain | Done | schema matches the ORM metadata (tested) |
+| Three-layer tenant isolation | Done | security tests: cross-tenant read/write and the HTTP boundary |
+| Prompt-injection trust boundary (`UntrustedContent`) | Done | security tests over the specification's attack strings |
+| Agent Runtime + registry + result validator | Done | agent tests; the validator was written before any agent |
+| Deterministic engines (crawler, checks, scoring, keywords, competitors, content) | Done | unit + integration tests against an in-process site |
+| GSC / GA4 / CMS integrations (production + labelled development adapters) | Done | integration tests against an in-process fake Google |
+| Opportunity → prioritisation → decision → execution stack | Done | integration + the end-to-end mission |
+| Mission workflow + local and Temporal engines | Done | the end-to-end mission test |
+| FastAPI application (38 paths, one envelope) + worker | Done | 13 API tests through the real ASGI app |
+| Eleven MVP agents with manifest, impl, schemas, prompt, README, tests | Done | the registry loads and instantiates all of them |
 
-Everything else in the specification is **not built yet** and is not stubbed,
-mocked or faked. There are no placeholder dashboards and no fabricated metrics.
+A metric the platform cannot measure is `null` with honest provenance.
+Development-mode integration data is labelled synthetic everywhere it appears.
+There are no placeholder dashboards and no fabricated metrics.
+
+## Quickstart
+
+```bash
+make install        # venv + editable install with dev/worker/llm extras
+make migrate        # alembic upgrade head  (needs PostgreSQL 16 + pgvector)
+make seed           # create the demonstration tenant
+make run            # API at http://localhost:8000  (/docs for Swagger)
+# or, the whole stack:
+docker compose up
+```
+
+The canonical mission, end to end, is in
+[`docs/api/walkthrough.md`](docs/api/walkthrough.md).
 
 ## Repository layout
 
 ```
 apps/
-  api/            FastAPI application            (not yet implemented)
-  worker/         Temporal worker                (not yet implemented)
-  web/            Next.js product application    (not yet implemented)
+  api/            FastAPI application            ✔
+  worker/         Temporal worker + maintenance  ✔
+  web/            Next.js product application    (in progress)
 
 packages/
-  shared/         config, errors, ids, db engine, untrusted-content boundary  ✔
-  schemas/        every cross-cutting Pydantic contract                        ✔
-  domain/         ORM models + domain services   (models ✔, services pending)
-  engines/        deterministic analysis engines (pending)
+  shared/         config, errors, ids, db, untrusted-content boundary, CLI  ✔
+  schemas/        every cross-cutting Pydantic contract                      ✔
+  domain/         ORM models, tenant-scoped repositories, services, seed     ✔
+  engines/        deterministic analysis engines                             ✔
   agent-registry/ agent-runtime/ orchestration/ workflows/ policies/
   permissions/ memory/ knowledge/ evidence/ events/ integrations/
-  prompts/ observability/                        (pending)
+  prompts/ observability/                                                    ✔
 
-agents/           35 MVP agents                  (pending)
-integrations/     provider connector docs        (pending)
+agents/           eleven MVP agents (manifest, impl, schemas, prompt, docs)  ✔
 database/
-  migrations/     Alembic revisions 0001–0011                                  ✔
-  build_migrations.py  regenerates the domain-by-domain chain                  ✔
+  migrations/     Alembic revisions 0001–0011                                ✔
+  build_migrations.py  regenerates the domain-by-domain chain                ✔
+  seed.py (seo_engine.database.seed)  the demonstration tenant               ✔
 tests/
-  unit/ integration/ security/                                                 ✔
-  agent/ workflow/ evaluation/                   (pending)
+  unit/ integration/ security/ agent/                                        ✔
 docs/
-  architecture/   ADRs and build status                                        ✔
-  source-material/ the authoritative specifications this build follows         ✔
+  api/            the HTTP contract, a walkthrough and example requests       ✔
+  architecture/   ADRs and build status                                       ✔
+  source-material/ the authoritative specifications this build follows        ✔
 ```
 
 ## Database domains
@@ -104,21 +124,25 @@ Prerequisites: Python 3.12+, PostgreSQL 16 with the `vector` extension, Redis.
 # 1. Environment
 cp .env.example .env          # then edit DATABASE_URL etc.
 
-# 2. Python toolchain
-uv venv --python 3.12 .venv
-uv pip install --python .venv -e ".[dev,worker,llm]"
+# 2. Install, migrate, seed
+make install                  # venv + editable install (dev/worker/llm/storage)
+make migrate                  # creates extensions + 85 tables
+make seed                     # the demonstration tenant
 
-# 3. Database
-createdb seo_engine
-.venv/bin/python -m alembic upgrade head     # creates extensions + 75 tables
+# 3. Run
+make run                      # API with reload; /docs for Swagger
+make worker                   # the worker process (Temporal + maintenance)
 
 # 4. Checks
-.venv/bin/python -m ruff check .
-.venv/bin/python -m pytest -q
+make lint
+make test                     # full suite (needs PostgreSQL + Redis)
 ```
 
-`docker compose up` is not yet available — the compose file lands with the API
-and worker applications.
+Or the whole stack in containers:
+
+```bash
+docker compose up             # postgres, redis, temporal, api (migrated+seeded), worker, web
+```
 
 ### Regenerating the migration chain
 
@@ -136,7 +160,7 @@ are treated as invariants, not aspirations:
 3. Agents reach data through domain services, never the database directly.
 4. Every consequential action is policy-evaluated, approved and audited.
 5. Every recommendation cites evidence or is explicitly a hypothesis —
-   enforced by a validator on `ProposedRecommendation`.
+   enforced by a validator written before any agent.
 6. Chain of thought is never exposed or persisted; observations, evidence,
    conclusions, confidence and limitations are.
 7. External content is `UNTRUSTED_EXTERNAL_CONTENT` and is never concatenated
@@ -147,8 +171,12 @@ are treated as invariants, not aspirations:
 
 ## Documentation
 
-- [`docs/architecture/build-status.md`](docs/architecture/build-status.md) — what
-  is built, what is not, and what the next engineering phase is.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md), [`AGENTS.md`](AGENTS.md),
+  [`SECURITY.md`](SECURITY.md), [`INTEGRATIONS.md`](INTEGRATIONS.md),
+  [`CONTRIBUTING.md`](CONTRIBUTING.md), [`DEPLOYMENT.md`](DEPLOYMENT.md).
+- [`docs/api/`](docs/api/) — the HTTP contract, a walkthrough and example requests.
+- [`docs/architecture/build-status.md`](docs/architecture/build-status.md) — the
+  per-phase account of what is built.
 - [`docs/architecture/decisions.md`](docs/architecture/decisions.md) — ADRs.
 - [`docs/source-material/`](docs/source-material/) — the authoritative
   specifications and the supplied Google Search documentation.

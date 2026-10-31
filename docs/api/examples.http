@@ -1,0 +1,117 @@
+# SEO Engine — example requests.
+#
+# For editors with an HTTP client (VS Code REST Client, JetBrains .http). Run
+# the login block first, copy the access_token into @token, then the rest.
+# Nothing here is authoritative — /api/v1/openapi.json is — but these are the
+# calls you reach for first.
+
+@base = http://localhost:8000/api/v1
+@token = PASTE_ACCESS_TOKEN_HERE
+
+### Liveness (no auth)
+GET {{base}}/../healthz
+
+### Readiness — checks the database (no auth)
+GET {{base}}/../readyz
+
+### Register a new account + organisation
+POST {{base}}/auth/register
+content-type: application/json
+
+{
+  "email": "you@example.com",
+  "password": "a-strong-password-123",
+  "name": "You",
+  "organisation_name": "Your Org"
+}
+
+### Log in
+POST {{base}}/auth/login
+content-type: application/json
+
+{ "email": "you@example.com", "password": "a-strong-password-123" }
+
+### Who am I (permissions included)
+GET {{base}}/auth/me
+authorization: Bearer {{token}}
+
+### Create a brand
+POST {{base}}/brands
+authorization: Bearer {{token}}
+content-type: application/json
+
+{ "name": "Acme Diagnostics", "industry": "diagnostics", "risk_category": "health" }
+
+### List brands (paginated; meta.total is the tenant's count)
+GET {{base}}/brands
+authorization: Bearer {{token}}
+
+### Add a service to a brand
+POST {{base}}/brands/BRAND_ID/services
+authorization: Bearer {{token}}
+content-type: application/json
+
+{ "name": "DNA testing", "keywords": ["dna testing", "paternity test"], "revenue_weight": 2.0 }
+
+### Connect Search Console (development-adapter mode without credentials)
+POST {{base}}/brands/BRAND_ID/integrations
+authorization: Bearer {{token}}
+content-type: application/json
+
+{ "provider": "google_search_console" }
+
+### Add a website
+POST {{base}}/brands/BRAND_ID/websites
+authorization: Bearer {{token}}
+content-type: application/json
+
+{ "url": "https://acme.example" }
+
+### Start a technical audit (202; poll the crawls / runs endpoints)
+POST {{base}}/websites/WEBSITE_ID/audit
+authorization: Bearer {{token}}
+content-type: application/json
+
+{ "max_pages": 50, "max_depth": 3 }
+
+### Plan a mission
+POST {{base}}/brands/BRAND_ID/missions
+authorization: Bearer {{token}}
+content-type: application/json
+
+{ "objective": "Increase qualified organic leads", "website_id": "WEBSITE_ID" }
+
+### Run a mission (202)
+POST {{base}}/missions/MISSION_ID/run
+authorization: Bearer {{token}}
+
+### Read a mission: status, baseline, task graph, progress, metrics
+GET {{base}}/missions/MISSION_ID
+authorization: Bearer {{token}}
+
+### Recommendations (each cites evidence; health brands require approval)
+GET {{base}}/brands/BRAND_ID/recommendations
+authorization: Bearer {{token}}
+
+### Approve a recommendation
+POST {{base}}/recommendations/RECOMMENDATION_ID/approve
+authorization: Bearer {{token}}
+content-type: application/json
+
+{ "note": "Approved for drafting" }
+
+### The agent registry and their declared contracts
+GET {{base}}/agents
+authorization: Bearer {{token}}
+
+### Agent runs for a mission (the observable record)
+GET {{base}}/agents/runs?mission_id=MISSION_ID
+authorization: Bearer {{token}}
+
+### Semantic memory search (this tenant only)
+GET {{base}}/memory/search?q=brand%20profile&brand_id=BRAND_ID
+authorization: Bearer {{token}}
+
+### The audit log (requires audit.read)
+GET {{base}}/audit
+authorization: Bearer {{token}}
