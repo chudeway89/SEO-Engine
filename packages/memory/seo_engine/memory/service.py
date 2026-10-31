@@ -361,4 +361,25 @@ class MemoryService:
         )
 
 
-__all__ = ["DEFAULT_TTL", "MemoryHit", "MemoryService"]
+async def sweep_expired_memory(session: AsyncSession) -> int:
+    """Deactivate every memory past its own expiry, across all tenants.
+
+    This is the one platform-level memory write in the system, and it is
+    maintenance, not retrieval: it only flips ``is_active`` to False on rows
+    whose ``expires_at`` has already passed. It never reads one tenant's memory
+    into another's — nothing leaves the row it is written to — so it is exempt
+    from tenant scoping by design, and says so here rather than hiding it.
+    """
+    now = utcnow()
+    result = await session.execute(
+        text(
+            "UPDATE memories SET is_active = false, forgotten_at = :now, updated_at = now() "
+            "WHERE is_active = true AND expires_at IS NOT NULL AND expires_at < :now"
+        ),
+        {"now": now},
+    )
+    await session.flush()
+    return int(result.rowcount or 0)
+
+
+__all__ = ["DEFAULT_TTL", "MemoryHit", "MemoryService", "sweep_expired_memory"]

@@ -198,6 +198,19 @@ class WebsiteService:
         self.principal.require(P_WEBSITE_READ)
         return await self.jobs.get_or_raise(job_id)
 
+    async def list_crawl_jobs(
+        self, website_id: uuid.UUID, *, limit: int = 50, offset: int = 0
+    ) -> list[CrawlJob]:
+        self.principal.require(P_WEBSITE_READ)
+        return list(
+            await self.jobs.list(
+                CrawlJob.website_id == website_id,
+                limit=limit,
+                offset=offset,
+                order_by=CrawlJob.created_at.desc(),
+            )
+        )
+
     async def mark_crawl_running(self, job_id: uuid.UUID) -> CrawlJob:
         job = await self.jobs.get_or_raise(job_id)
         job.status = CrawlJobStatus.RUNNING
