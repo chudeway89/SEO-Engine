@@ -81,7 +81,7 @@ class Settings(BaseSettings):
     # --- Application -------------------------------------------------------
     environment: Literal["development", "test", "staging", "production"] = "development"
     log_level: str = "INFO"
-    api_cors_origins: str = "http://localhost:3000"
+    api_cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     api_rate_limit_per_minute: int = 240
     repo_root: str | None = None
 
