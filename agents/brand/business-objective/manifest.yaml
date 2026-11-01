@@ -1,0 +1,38 @@
+id: BRD-003
+name: Business Objective Agent
+version: 1.0.0
+
+description: >
+  Maps each of the brand's stated goals to the search metric that would measure
+  it and the data source that metric needs, and says plainly when a goal cannot
+  be measured — a provider is not connected, no lead event is identified, or no
+  target or timeframe is set — so no mission runs against a target nobody can
+  observe.
+
+module: agent.py
+
+capabilities:
+  - brand.objectives.assess
+
+tools:
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: BusinessObjectiveInput
+output_schema: BusinessObjectiveOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  deterministic_fallback: true
+
+prompt: agents/brand/business-objective
+tags:
+  - brand
+  - measurement

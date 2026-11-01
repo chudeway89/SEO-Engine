@@ -138,6 +138,9 @@ class DecisionAgent(BaseAgent):
                         "action_type": action_type,
                         "target": {"url": opportunity.target_url},
                         "attributes": {"category": risk_category},
+                        # The concrete change, when the detecting agent specified
+                        # one; without it the action cannot be executed as-is.
+                        "change": (opportunity.data or {}).get("change"),
                     }
                     if action_type
                     else None

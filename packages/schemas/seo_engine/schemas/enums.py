@@ -379,6 +379,7 @@ class IntegrationProvider(StrEnum):
     GOOGLE_BUSINESS_PROFILE = "google_business_profile"
     AHREFS = "ahrefs"
     SEMRUSH = "semrush"
+    SERP_API = "serp_api"
     WORDPRESS = "wordpress"
     WEBFLOW = "webflow"
     GENERIC_CMS = "generic_cms"

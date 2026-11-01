@@ -19,11 +19,13 @@ from seo_engine.domain.models.search import (
 from seo_engine.domain.repositories import repository_for
 from seo_engine.events.bus import emit
 from seo_engine.permissions.rbac import P_RESEARCH_RUN, Principal
+from seo_engine.schemas.enums import DataProvenance
 from seo_engine.schemas.events import EventType
 from seo_engine.schemas.search import (
     KeywordCluster,
     KeywordRecord,
     SearchQuestion,
+    SERPResultItem,
     SERPSnapshot,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -215,8 +217,14 @@ class SearchService:
         return stored
 
     async def store_snapshot(
-        self, brand_id: uuid.UUID, snapshot: SERPSnapshot
+        self,
+        brand_id: uuid.UUID,
+        snapshot: SERPSnapshot,
+        *,
+        brand_domain: str | None = None,
+        raw_reference: dict[str, Any] | None = None,
     ) -> SERPSnapshotRecord:
+        own = (brand_domain or "").lower().removeprefix("www.")
         record = self.snapshots.add(
             SERPSnapshotRecord(
                 brand_id=brand_id,
@@ -229,6 +237,7 @@ class SearchService:
                 available=snapshot.available,
                 unavailable_reason=snapshot.unavailable_reason,
                 features=snapshot.features,
+                raw_response=raw_reference or {},
                 observed_at=snapshot.observed_at,
             )
         )
@@ -243,10 +252,66 @@ class SearchService:
                     title=item.title,
                     snippet=item.snippet,
                     result_type=item.result_type,
+                    is_brand=bool(own) and item.domain.lower().removeprefix("www.") == own,
                 )
             )
         await self.session.flush()
         return record
+
+    async def latest_snapshots(
+        self, brand_id: uuid.UUID, *, limit: int = 100
+    ) -> list[SERPSnapshot]:
+        """The most recent observed page per query, rebuilt as contracts."""
+        records = await self.snapshots.list(
+            SERPSnapshotRecord.brand_id == brand_id,
+            limit=limit * 3,
+            order_by=SERPSnapshotRecord.observed_at.desc(),
+        )
+        latest: dict[str, SERPSnapshotRecord] = {}
+        for record in records:
+            latest.setdefault(record.query.lower(), record)
+        snapshots: list[SERPSnapshot] = []
+        for record in list(latest.values())[:limit]:
+            rows = await self.results.list(
+                SERPResultRecord.snapshot_id == record.id, order_by=SERPResultRecord.position
+            )
+            snapshots.append(
+                SERPSnapshot(
+                    query=record.query,
+                    engine=record.engine,
+                    country=record.country,
+                    device=record.device,
+                    observed_at=record.observed_at,
+                    provider=record.provider,
+                    provenance=DataProvenance(record.provenance),
+                    available=record.available,
+                    unavailable_reason=record.unavailable_reason,
+                    features=list(record.features or []),
+                    results=[
+                        SERPResultItem(
+                            position=row.position,
+                            url=row.url,
+                            title=row.title,
+                            snippet=row.snippet,
+                            domain=row.domain,
+                            result_type=row.result_type,
+                        )
+                        for row in rows
+                    ],
+                )
+            )
+        return snapshots
+
+    async def list_questions(
+        self, brand_id: uuid.UUID, *, limit: int = 200
+    ) -> list[SearchQuestionRecord]:
+        return list(
+            await self.questions.list(
+                SearchQuestionRecord.brand_id == brand_id,
+                limit=limit,
+                order_by=SearchQuestionRecord.created_at,
+            )
+        )
 
     async def keyword_summary(self, brand_id: uuid.UUID) -> dict[str, Any]:
         keywords = await self.list_keywords(brand_id, limit=1000)

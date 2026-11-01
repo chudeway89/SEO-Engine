@@ -1,0 +1,38 @@
+id: CNT-001
+name: Content Strategist Agent
+version: 1.0.0
+
+description: >
+  Sequences the content gap decisions into a capacity-bounded roadmap: fix and
+  consolidate existing pages before creating new ones, order each phase by
+  commercial intent and service alignment, and report DO_NOTHING topics and the
+  overflow backlog rather than cramming them in.
+
+module: agent.py
+
+capabilities:
+  - content.strategy.plan
+
+tools:
+  - memory
+
+memory_scopes:
+  - brand
+  - mission
+
+risk_level: low
+
+input_schema: ContentStrategyInput
+output_schema: ContentStrategyOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  deterministic_fallback: true
+
+prompt: agents/content/content-strategist
+tags:
+  - content
+  - strategy

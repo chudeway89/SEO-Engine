@@ -316,7 +316,17 @@ def test_absent_citations_are_reported_as_unmeasured_not_as_zero_visibility(
 
 def test_gsc_absence_is_stated_as_a_note(crawl: CrawlResult) -> None:
     report = assess_ai_search_readiness(crawl, website_id="w1", gsc_connected=False)
-    assert any("Search Console is not connected" in note for note in report.notes)
+    assert any("Search Console was unavailable (not connected)" in n for n in report.notes)
+    # The note gives the actual reason: "not permitted" is not "not connected".
+    denied = assess_ai_search_readiness(
+        crawl,
+        website_id="w1",
+        gsc_connected=False,
+        gsc_unavailable_reason="the operator lacks the permission",
+    )
+    assert any("(the operator lacks the permission)" in n for n in denied.notes)
+    connected = assess_ai_search_readiness(crawl, website_id="w1", gsc_connected=True)
+    assert not any("Search Console was unavailable" in n for n in connected.notes)
 
 
 def test_agentic_web_readiness_scores_the_documented_signals(crawl: CrawlResult) -> None:

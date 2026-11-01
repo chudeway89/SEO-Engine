@@ -10,6 +10,10 @@ import type {
   AgentRun,
   AgentSummary,
   Brand,
+  ContentAsset,
+  ContentDetail,
+  ContentSource,
+  ContentVersion,
   Envelope,
   Integration,
   Me,
@@ -17,8 +21,12 @@ import type {
   MissionPlan,
   MissionSummary,
   PageMeta,
+  PublishResult,
   Recommendation,
+  ReviewResult,
+  StrategyPreview,
   Tokens,
+  VersionInput,
   Website,
 } from "./types";
 
@@ -199,6 +207,23 @@ export async function connectIntegration(
   return request<Integration>("POST", `/brands/${brandId}/integrations`, { provider });
 }
 
+export async function disconnectIntegration(
+  brandId: string,
+  provider: string,
+): Promise<Integration> {
+  return (
+    await request<Integration>("DELETE", `/brands/${brandId}/integrations/${provider}`)
+  ).data;
+}
+
+// --- strategy ---------------------------------------------------------------
+export async function previewStrategy(
+  brandId: string,
+  input: { objective?: string; website_id?: string },
+): Promise<StrategyPreview> {
+  return (await request<StrategyPreview>("POST", `/brands/${brandId}/strategy`, input)).data;
+}
+
 // --- missions ---------------------------------------------------------------
 export async function listMissions(brandId: string): Promise<Mission[]> {
   return (await request<Mission[]>("GET", `/brands/${brandId}/missions`)).data;
@@ -272,4 +297,48 @@ export async function listAgents(): Promise<AgentSummary[]> {
 
 export async function listRuns(missionId: string): Promise<AgentRun[]> {
   return (await request<AgentRun[]>("GET", `/agents/runs?mission_id=${missionId}`)).data;
+}
+
+// --- content ----------------------------------------------------------------
+export async function listContent(brandId: string, status?: string): Promise<ContentAsset[]> {
+  const q = status ? `?status=${encodeURIComponent(status)}` : "";
+  return (await request<ContentAsset[]>("GET", `/brands/${brandId}/content${q}`)).data;
+}
+
+export async function getContent(assetId: string): Promise<ContentDetail> {
+  return (await request<ContentDetail>("GET", `/content/${assetId}`)).data;
+}
+
+export async function listSources(brandId: string): Promise<ContentSource[]> {
+  return (await request<ContentSource[]>("GET", `/brands/${brandId}/sources`)).data;
+}
+
+export async function writeVersion(
+  assetId: string,
+  input: VersionInput,
+): Promise<{ asset: ContentAsset; version: ContentVersion }> {
+  return (
+    await request<{ asset: ContentAsset; version: ContentVersion }>(
+      "POST",
+      `/content/${assetId}/versions`,
+      input,
+    )
+  ).data;
+}
+
+export async function reviewContent(assetId: string): Promise<Result<ReviewResult>> {
+  return request<ReviewResult>("POST", `/content/${assetId}/review`);
+}
+
+export async function approveContent(assetId: string, note: string): Promise<ContentAsset> {
+  return (await request<ContentAsset>("POST", `/content/${assetId}/approve`, { note })).data;
+}
+
+export async function returnToDraft(assetId: string, note: string): Promise<ContentAsset> {
+  return (await request<ContentAsset>("POST", `/content/${assetId}/return-to-draft`, { note }))
+    .data;
+}
+
+export async function publishContent(assetId: string): Promise<PublishResult> {
+  return (await request<PublishResult>("POST", `/content/${assetId}/publish`)).data;
 }

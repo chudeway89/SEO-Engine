@@ -27,7 +27,7 @@ from seo_engine.agent_runtime.resolvers import (
     ToolResolver,
 )
 from seo_engine.agent_runtime.validator import ResultValidator
-from seo_engine.domain.models.agents import AgentMessage, AgentOutput, AgentRun
+from seo_engine.domain.models.agents import AgentMessage, AgentOutput, AgentRun, LLMUsage
 from seo_engine.domain.repositories import repository_for
 from seo_engine.events.bus import emit
 from seo_engine.evidence.collector import EvidenceCollector
@@ -43,6 +43,7 @@ from seo_engine.shared.errors import (
     SEOEngineError,
 )
 from seo_engine.shared.ids import new_ref, utcnow
+from seo_engine.shared.llm import ModelGateway, get_gateway
 from seo_engine.shared.untrusted import UntrustedContent
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,6 +52,7 @@ log = get_logger(__name__)
 AgentRunRepository = repository_for(AgentRun)
 AgentMessageRepository = repository_for(AgentMessage)
 AgentOutputRepository = repository_for(AgentOutput)
+LLMUsageRepository = repository_for(LLMUsage)
 
 
 @dataclass(slots=True)
@@ -136,6 +138,7 @@ class AgentRunner:
             )
 
             started = time.perf_counter()
+            context: AgentContext | None = None
             try:
                 # 2-7. Validate capabilities, resolve everything, build context.
                 context = await self._build_context(
@@ -215,6 +218,7 @@ class AgentRunner:
 
             except Exception as exc:
                 latency_ms = int((time.perf_counter() - started) * 1000)
+                self._record_model_usage(run_record, context)
                 await self._fail_run(
                     run_record, exc, latency_ms, request, correlation_id=correlation_id
                 )
@@ -330,6 +334,12 @@ class AgentRunner:
         services = dict(request.services)
         services.setdefault("evidence", collector)
         services.setdefault("memory", MemoryResolver(self.session, tenant_id).service)
+        # Each run gets its own view of the model gateway — whichever model is
+        # connected, or none — so every call it makes is attributed to it.
+        gateway = services.get("model_gateway")
+        services["model_gateway"] = (
+            gateway if isinstance(gateway, ModelGateway) else get_gateway()
+        ).scoped()
 
         return (
             builder.with_inputs(request.inputs)
@@ -377,6 +387,7 @@ class AgentRunner:
         collector: EvidenceCollector = context.services["evidence"]
         await collector.persist(result.evidence)
 
+        self._record_model_usage(run, context)
         outputs = AgentOutputRepository(self.session, run.tenant_id)
         outputs.add(
             AgentOutput(
@@ -389,6 +400,34 @@ class AgentRunner:
         )
         await self.session.flush()
         return [e.id for e in result.evidence]
+
+    def _record_model_usage(self, run: AgentRun, context: AgentContext | None) -> None:
+        """Persist every model call the run made, succeeded or failed."""
+        gateway = context.services.get("model_gateway") if context is not None else None
+        if not isinstance(gateway, ModelGateway):
+            return
+        repo = LLMUsageRepository(self.session, run.tenant_id)
+        for usage in gateway.usage_log:
+            repo.add(
+                LLMUsage(
+                    provider=usage.provider[:64],
+                    model=usage.model[:120],
+                    agent_id=run.agent_id,
+                    agent_run_id=run.id,
+                    task_id=run.task_id,
+                    prompt_key=usage.prompt_key,
+                    prompt_version=usage.prompt_version,
+                    input_tokens=usage.input_tokens,
+                    output_tokens=usage.output_tokens,
+                    cached_tokens=usage.cached_tokens,
+                    estimated_cost_usd=usage.estimated_cost_usd,
+                    latency_ms=usage.latency_ms,
+                    succeeded=usage.succeeded,
+                    error=usage.error,
+                    stop_reason=(usage.stop_reason or None) and usage.stop_reason[:32],
+                )
+            )
+        gateway.usage_log.clear()
 
     def _close_run(self, run: AgentRun, result: AgentResult, latency_ms: int) -> None:
         run.status = result.status

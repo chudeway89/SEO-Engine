@@ -12,12 +12,14 @@ from __future__ import annotations
 from typing import Any
 
 from seo_engine.domain.services import BrandService
+from seo_engine.domain.services.content import ContentService
 from seo_engine.domain.services.decision import DecisionService
 from seo_engine.domain.services.integration import IntegrationService
 from seo_engine.domain.services.mission import MissionService
 from seo_engine.domain.services.search import SearchService
 from seo_engine.domain.services.website import WebsiteService
 from seo_engine.permissions.rbac import Principal
+from seo_engine.policies.engine import PolicyEngine
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -35,6 +37,10 @@ def build_services(
         "decisions": DecisionService(session, principal),
         "integrations": IntegrationService(session, principal),
         "missions": MissionService(session, principal),
+        # Agent-scoped: it can move a draft to review but refuses to approve.
+        "content": ContentService(session, principal, acting_as_agent=True),
+        # For evaluating proposed actions and drafts against the tenant's policies.
+        "policies": PolicyEngine(session, principal.tenant_id),
     }
     services.update(extra or {})
     return services

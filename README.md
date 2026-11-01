@@ -10,13 +10,16 @@ BRAND → WEBSITE → CRAWL → OBSERVE → RESEARCH → ANALYSE → OPPORTUNITY
 PRIORITISE → RECOMMEND → APPROVE → ACT → MEASURE → LEARN → MEMORY → REPEAT
 ```
 
-> **Build status:** this repository currently contains the verified foundation
-> **Build status:** the agentic operating system is built and runs the
-> canonical mission end to end — plan a task graph, execute each stage through
-> the Agent Runtime against a real crawl, measure a baseline, and produce
-> evidence-backed, approval-gated recommendations. 345 tests pass against a real
-> PostgreSQL + pgvector database. The remaining build item is the Next.js web
-> application; the API it consumes is complete.
+> **Build status:** the agentic operating system is built, with all 36 MVP
+> agents. The canonical mission plans a dependency-ordered task graph, executes
+> each stage through the Agent Runtime against a real crawl, measures a baseline,
+> and produces evidence-backed, approval-gated recommendations; a content mission
+> runs research → brief → draft → evaluation → quality gate → policy review →
+> publishing, and nothing publishes without a person. The platform is
+> model-agnostic and runs fully without a model: connect any model, or none, and
+> without one the writer leaves an outline a person completes in the content
+> screen; approved title and internal-link changes are applied through the
+> connected CMS. 495 tests pass against a real PostgreSQL + pgvector database.
 > See [`docs/architecture/build-status.md`](docs/architecture/build-status.md)
 > for a precise, per-phase account.
 
@@ -33,11 +36,16 @@ PRIORITISE → RECOMMEND → APPROVE → ACT → MEASURE → LEARN → MEMORY �
 | Prompt-injection trust boundary (`UntrustedContent`) | Done | security tests over the specification's attack strings |
 | Agent Runtime + registry + result validator | Done | agent tests; the validator was written before any agent |
 | Deterministic engines (crawler, checks, scoring, keywords, competitors, content) | Done | unit + integration tests against an in-process site |
-| GSC / GA4 / CMS integrations (production + labelled development adapters) | Done | integration tests against an in-process fake Google |
+| GSC / GA4 / SERP / CMS integrations (production + labelled development adapters) | Done | integration tests against in-process fake providers |
 | Opportunity → prioritisation → decision → execution stack | Done | integration + the end-to-end mission |
+| Approved SEO changes applied through the CMS (page title, internal links) | Done | change-execution tests against a fake WordPress REST API and the development CMS |
 | Mission workflow + local and Temporal engines | Done | the end-to-end mission test |
-| FastAPI application (38 paths, one envelope) + worker | Done | 13 API tests through the real ASGI app |
-| Eleven MVP agents with manifest, impl, schemas, prompt, README, tests | Done | the registry loads and instantiates all of them |
+| FastAPI application (63 paths, one envelope) + worker | Done | 18 API tests through the real ASGI app |
+| 36 MVP agents with manifest, impl, schemas, prompt, README and behavioural tests | Done | registry + catalogue tests; every agent but the planner runs in a mission graph |
+| Content pipeline with human-only approval and gated publishing | Done | content agent tests: outlines never publish; approval and publish action both required |
+| Human writing path (write → review → approve → publish) + web content screen | Done | an API test drives it end to end; the screen was driven in a real browser |
+| Model-agnostic, model-optional gateway: any Chat Completions endpoint (hosted or local), the Messages API, or a registered provider; runs fully without a model | Done | protocol tests against in-process fakes; any-model, failing-model and no-model agent tests; per-run usage recorded |
+| Golden evaluation datasets | Done for 5 agents | data-driven cases run through the real runtime (`tests/evaluation/`) |
 
 A metric the platform cannot measure is `null` with honest provenance.
 Development-mode integration data is labelled synthetic everywhere it appears.
@@ -74,7 +82,7 @@ packages/
   permissions/ memory/ knowledge/ evidence/ events/ integrations/
   prompts/ observability/                                                    ✔
 
-agents/           eleven MVP agents (manifest, impl, schemas, prompt, docs)  ✔
+agents/           36 MVP agents (manifest, impl, schemas, prompt, docs)  ✔
 database/
   migrations/     Alembic revisions 0001–0011                                ✔
   build_migrations.py  regenerates the domain-by-domain chain                ✔

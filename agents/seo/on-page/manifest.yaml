@@ -1,0 +1,37 @@
+id: SEO-002
+name: On-Page SEO Agent
+version: 1.0.0
+
+description: >
+  Measures whether each page signals the keyword mapped to it — in its title,
+  H1, meta description, opening copy and URL — and proposes a corrected title
+  built only from the keyword and brand name. It hands misalignments downstream
+  as evidenced opportunity seeds; it changes nothing on the site.
+
+module: agent.py
+
+capabilities:
+  - seo.audit.onpage
+
+tools:
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: OnPageInput
+output_schema: OnPageOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  deterministic_fallback: true
+
+prompt: agents/seo/on-page
+tags:
+  - seo
+  - on-page

@@ -1,0 +1,43 @@
+id: PUB-001
+name: Publishing Agent
+version: 1.0.0
+
+description: >
+  Publishes content only when every gate has been passed: a person approved the
+  asset, its current version passed the quality gate and the policy review, it
+  is prose rather than an outline, and the cms.publish action the policy engine
+  created has the approval policy requires. It publishes through the brand's
+  connected CMS adapter and records exactly what that adapter reported.
+
+module: agent.py
+
+capabilities:
+  - content.publish
+  - cms.publish
+
+tools:
+  - cms
+  - memory
+
+memory_scopes:
+  - brand
+  - mission
+
+risk_level: high
+
+input_schema: PublishingInput
+output_schema: PublishingOutput
+
+autonomous_actions: []
+
+# Publishing changes what visitors see. It is never autonomous.
+approval_required_for:
+  - cms.publish
+
+model_policy:
+  deterministic_fallback: true
+
+prompt: agents/execution/publishing
+tags:
+  - execution
+  - publishing

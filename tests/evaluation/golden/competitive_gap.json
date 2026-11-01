@@ -1,0 +1,32 @@
+{
+  "agent_id": "CMP-003",
+  "description": "CMP-003: coverage gaps become evidenced seeds; without SERP data, visibility is reported missing rather than assumed.",
+  "cases": [
+    {
+      "name": "coverage_only_without_serp",
+      "brand": {"website": "https://golden.test", "competitors": [{"name": "Rival", "domain": "rival.test"}]},
+      "inputs": {
+        "keyword_gaps": [
+          {"keyword": "nipt cost", "competitor_domains": ["rival.test"]},
+          {"keyword": "dna test time", "competitor_domains": ["rival.test", "other.test"]}
+        ]
+      },
+      "expect": [
+        {"path": "outputs.competitive_gap.gaps_total", "op": "eq", "value": 2},
+        {"path": "outputs.competitive_gap.gaps.0.topic", "op": "eq", "value": "dna test time"},
+        {"path": "outputs.competitive_gap.synthetic_serp", "op": "eq", "value": false},
+        {"path": "outputs.opportunity_seeds", "op": "len", "value": 2},
+        {"path": "limitations", "op": "any_contains", "value": "visibility cannot be compared"}
+      ]
+    },
+    {
+      "name": "nothing_to_compare",
+      "brand": {},
+      "inputs": {"keyword_gaps": []},
+      "expect": [
+        {"path": "summary", "op": "contains", "value": "neither coverage nor visibility"},
+        {"path": "outputs", "op": "not_contains", "value": "competitive_gap"}
+      ]
+    }
+  ]
+}

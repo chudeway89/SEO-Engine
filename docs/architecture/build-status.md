@@ -4,7 +4,7 @@ An honest, per-phase account of the SEO Engine build. Nothing in this document
 is aspirational: a phase is "done" only if it runs and is covered by a test that
 passes against the real PostgreSQL + pgvector database.
 
-Last updated: 2026-10-31.
+Last updated: 2026-11-01.
 
 ---
 
@@ -17,10 +17,12 @@ and produces evidence-backed, approval-gated recommendations. This is covered by
 `tests/integration/test_mission_workflow.py`, which runs the real orchestrator,
 runtime, crawler, engines and database with nothing mocked but the network.
 
-**345 tests pass** (unit, integration, security, agent, workflow and migration),
-`ruff` is clean, `mypy` reports no issues across 106 source files, and the API,
-worker, Docker stack, seed and operator CLI exist. The Next.js web application is
-built and was verified end to end through a real browser.
+All **36 MVP agents** named by the build prompt are implemented and wired into
+mission graphs. **495 tests pass** (unit, integration, security, agent,
+workflow, migration and golden evaluation), `ruff` is clean, `mypy` reports no
+issues across 130 source files, and the API, worker, Docker stack, seed and
+operator CLI exist. The Next.js web application builds, and its content screen
+was driven through the whole human writing path in a real browser.
 
 What has deliberately *not* happened, throughout: no placeholder UI, no mocked
 dashboards, no fabricated metrics, no empty agent directories created to look
@@ -47,11 +49,11 @@ it appears.
 | 14–15 | GSC and GA4 integrations | **Done** — production adapters (tested against an in-process fake Google) and labelled development adapters |
 | 16 | Opportunity and recommendation engine | **Done** — detection from observations, the internal prioritisation model, the decision gate |
 | 17 | Policy and approval engine | **Done** — rule evaluation, the automation-policy deferral, the approval matrix |
-| 18 | Action execution framework | **Done** — policy-gated actions, draft-first CMS, outcome records |
+| 18 | Action execution framework | **Done** — policy-gated actions with the manifest approval floor, executors for approved title and internal-link changes, draft-first CMS, outcome records |
 | 19 | Workflows | **Done** — the mission workflow, the local engine, and the Temporal engine + worker |
-| 20 | Web application | **Done** — a Next.js app, built and verified end to end through a real browser |
+| 20 | Web application | **Done** — a Next.js app: brands, integrations, the strategy preview, missions, recommendations, and the content screen (write, review, approve, publish) |
 | 21 | End-to-end mission | **Done** — the canonical mission runs and is asserted end to end |
-| 22 | Test suites | **Done** — unit, integration, security, agent, workflow, migration (345 tests) |
+| 22 | Test suites | **Done** — unit, integration, security, agent, workflow, migration and golden evaluation (495 tests) |
 | 23 | Security hardening | **Done** — isolation, injection boundary, no-fabrication, chain-of-thought and approval all enforced and tested |
 | 24 | Documentation and QA gate | **Done** — the docs, `docs/api`, per-agent docs, and `make gate` (lint + typecheck + full suite, all green) |
 
@@ -59,25 +61,58 @@ it appears.
 
 ## The MVP agents
 
-Eleven agents are implemented, each with a manifest, implementation, schemas,
-prompt, README and behavioural tests: BRD-001, SEO-001, SEO-003, SEO-006,
-CMP-002, ANA-001, ANA-002, OPP-001, PRI-001, DEC-001, EXE-001. The orchestrator
-selects which a given mission needs rather than running all of them, and records
-why each omitted stage was omitted. More agents from the full catalogue can be
-added behind the same runtime; the eleven here are the set the canonical mission
-exercises.
+All 36 agents are implemented, each with a manifest, implementation, schemas,
+prompt, README and behavioural tests (see [`AGENTS.md`](../../AGENTS.md) for the
+table). The orchestrator selects which a mission needs and records why every
+omitted stage was omitted:
+
+- **qualified leads** runs 24 stages: brand, objectives and profile; the crawl and
+  indexability; Search Console, GA4 and the demand landscape; keyword, SERP,
+  on-page, intent, architecture and question research; competitor discovery,
+  analysis and gaps; content gaps; opportunities, prioritisation, the decision
+  gate, the quality and policy guardians, and the execution plan;
+- **content production** runs research → strategy → research packs → briefs →
+  drafts → evaluation → optimisation → quality gate → policy review →
+  repurposing → publishing;
+- the other mission types run the subsets they need.
+
+Analysis agents hand their findings to opportunity detection as evidenced seeds;
+a seed with no evidence is refused. Stages have hard dependencies (`depends_on`)
+and ordering-only ones (`after`), so a stage that merely benefits from SERP data
+still runs, and says so, when SERP is not connected.
 
 ---
 
 ## Honest gaps
 
 - **Production integration credentials** are not bundled (they must not be):
-  without them the Google integrations run in development-adapter mode, which is
-  labelled synthetic throughout. The production adapters are implemented and
-  tested against an in-process fake Google.
-- The **agent evaluation golden datasets** referenced by some agent READMEs are
-  a growing set; the behavioural assertions live in the agent and integration
-  tests today.
-- The **full agent catalogue** is larger than the eleven MVP agents built here;
-  the eleven are the set the canonical mission exercises, and more plug in behind
-  the same runtime without new infrastructure.
+  without them Search Console, GA4 and the SERP API run their development
+  adapters, which are labelled synthetic throughout. Synthetic SERP domains
+  (`*.example`) are never proposed as competitors and a gap resting only on
+  synthetic SERP data never becomes an opportunity. The production adapters are
+  implemented and tested against in-process fakes.
+- **No live model call was made in this build**, because no model is connected
+  here. The platform is model-agnostic: the Chat Completions and Messages
+  protocol providers are tested against in-process fakes of each API (request
+  shape, channel separation, keyless endpoints, parameter adaptation, retries,
+  usage and errors), and the writer is tested against a scripted stand-in for
+  any model, including one that fails, wraps its answer, emits inline reasoning
+  or is cut off. Without a model every agent and mission still runs; the writer
+  produces outlines, never invented prose, and a person writes the piece over
+  the outline (the content screen, or `POST /content/{id}/versions`).
+- **Live-page executors are deliberately narrow.** An approved page-title change
+  and an approved internal link are applied through WordPress's REST API or the
+  development CMS. Meta descriptions, structured data and redirects live in
+  themes, SEO plugins or server configuration that the CMS content API does not
+  expose, so those approved actions are reported and left for a person. Webflow
+  refuses live-page edits explicitly. With the development CMS every change is
+  recorded in `development_adapter` mode and reaches no real site.
+- **A failed agent run triggered inside an API request** (the strategy preview,
+  content review, publish) returns the typed error with its `request_id` and is
+  logged with its error code, but its run record is rolled back with the
+  request. Mission and background runs keep their failed-run records. Keeping
+  them for request-scoped runs needs the runner to isolate an agent's writes in
+  a savepoint, which is a change to the runtime's transaction design.
+- **Golden evaluation datasets** cover five agents (BRD-001, BRD-003, ORCH-001,
+  CNT-001, CMP-003). Every other agent's behaviour is asserted in
+  `tests/agent/`; adding a golden case is adding JSON.

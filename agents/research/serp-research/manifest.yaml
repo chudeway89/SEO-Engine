@@ -1,0 +1,38 @@
+id: RES-002
+name: SERP Research Agent
+version: 1.0.0
+
+description: >
+  Observes the results pages for the brand's priority queries through the SERP
+  integration, persists each snapshot with its raw response, and summarises the
+  features present, the domains that recur and where the brand appears. Pages
+  from the development adapter are labelled synthetic through every figure.
+
+module: agent.py
+
+capabilities:
+  - seo.serp.research
+
+tools:
+  - serp
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: SERPResearchInput
+output_schema: SERPResearchOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  deterministic_fallback: true
+
+prompt: agents/research/serp-research
+tags:
+  - research
+  - serp

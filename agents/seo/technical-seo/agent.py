@@ -134,10 +134,16 @@ class TechnicalSEOAgent(BaseAgent):
         await websites.replace_issues(website.id, job.id, issues)
         await websites.store_scorecard(website.id, website.brand_id, job.id, report.scorecard)
 
+        gsc = context.tools.get("gsc")
         ai_search = assess_ai_search_readiness(
             crawl,
             website_id=str(website.id),
-            gsc_connected="gsc" in context.tools and context.tools["gsc"].available,
+            gsc_connected=gsc is not None and gsc.available,
+            gsc_unavailable_reason=(
+                "the gsc tool was not granted to this run"
+                if gsc is None
+                else gsc.unavailable_reason
+            ),
         )
         agentic = assess_agentic_web_readiness(crawl, website_id=str(website.id))
 

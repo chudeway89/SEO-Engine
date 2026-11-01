@@ -156,13 +156,16 @@ class LLMUsage(UUIDPrimaryKeyMixin, TimestampMixin, TenantOwnedMixin, Base):
     task_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
     prompt_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
     prompt_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    input_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    output_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    cached_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    estimated_cost_usd: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    # NULL means "not known": the provider did not report it, or no price is
+    # configured for the model. Never a guessed figure.
+    input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cached_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    estimated_cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     latency_ms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     succeeded: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    stop_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
 __all__ = [

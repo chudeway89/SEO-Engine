@@ -52,6 +52,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 log = get_logger(__name__)
 
+#: Upper bound on evidence refs handed to one stage — far above what a mission
+#: produces, present only so a pathological run cannot build an unbounded query.
+MAX_INHERITED_EVIDENCE = 5000
+
 
 @dataclass(slots=True)
 class StepResult:
@@ -295,7 +299,11 @@ class MissionWorkflow:
             services=build_services(self.session, self.principal, extra=self.extra_services),
             available_integrations=connected,
             automation_policy=mission.automation_policy,
-            inherited_evidence_refs=inherited[-40:],
+            # Every upstream ref, de-duplicated: a decision may cite evidence from
+            # any earlier stage, and a truncated window would make a correctly
+            # evidenced recommendation look unevidenced. Records are loaded with
+            # one query and never rendered into a prompt, so the cost is small.
+            inherited_evidence_refs=list(dict.fromkeys(inherited))[-MAX_INHERITED_EVIDENCE:],
         )
 
         try:
@@ -368,7 +376,7 @@ class MissionWorkflow:
                 continue
             stage = stage_by_task.get(task.id, task.task_type)
             spec = STAGE_SPECS.get(stage)
-            blockers = sorted(set(spec.depends_on) & failed) if spec else []
+            blockers = sorted(set(spec.depends_on + spec.after) & failed) if spec else []
             reason = (
                 f"Blocked because {', '.join(blockers)} did not complete."
                 if blockers

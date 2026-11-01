@@ -1,0 +1,38 @@
+id: CNT-007
+name: Content Evaluator Agent
+version: 1.0.0
+
+description: >
+  Scores the current version of each draft against its brief on twelve
+  criteria — intent, accuracy, sources, originality, usefulness, completeness,
+  brand alignment, readability, internal linking, structured data, conversion
+  relevance and risk — and records the evaluation against that exact version.
+  Blocking criteria cannot be averaged away.
+
+module: agent.py
+
+capabilities:
+  - content.evaluate
+
+tools:
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: ContentEvaluatorInput
+output_schema: ContentEvaluatorOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  deterministic_fallback: true
+
+prompt: agents/content/content-evaluator
+tags:
+  - content
+  - evaluation

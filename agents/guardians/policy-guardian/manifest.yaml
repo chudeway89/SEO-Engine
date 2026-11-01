@@ -1,0 +1,39 @@
+id: POL-001
+name: Policy Guardian Agent
+version: 1.0.0
+
+description: >
+  Holds content and actions to the brand's rules. Checks drafts for prohibited
+  claims, forbidden terminology, unverified claims and absolute outcome language
+  in regulated categories, and returns a non-compliant draft from review to
+  draft. Re-evaluates pending and approved actions against current policy and
+  reports any that policy would now block or send for approval.
+
+module: agent.py
+
+capabilities:
+  - policy.evaluate
+
+tools:
+  - policy
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: medium
+
+input_schema: PolicyReviewInput
+output_schema: PolicyReviewOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  deterministic_fallback: true
+
+prompt: agents/guardians/policy-guardian
+tags:
+  - guardian
+  - policy

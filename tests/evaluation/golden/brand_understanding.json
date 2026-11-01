@@ -1,0 +1,79 @@
+{
+  "agent_id": "BRD-001",
+  "description": "BRD-001 evaluation criteria from its README: reports exactly what the brand graph contains, invents nothing from an empty graph, lowers completeness with a limitation per missing dimension, lets a goal outrank revenue weight, surfaces prohibited claims, and cites its evidence.",
+  "cases": [
+    {
+      "name": "complete_graph_is_reported_exactly",
+      "brand": {
+        "name": "Golden Labs",
+        "industry": "Clinical diagnostics",
+        "risk_category": "health",
+        "goals": [{"goal_type": "acquisition", "description": "Grow DNA testing enquiries", "priority": 1}],
+        "services": [
+          {"name": "DNA testing", "keywords": ["dna test"], "revenue_weight": 1.0, "priority": 2},
+          {"name": "Ancestry testing", "keywords": ["ancestry dna"], "revenue_weight": 3.0, "priority": 1}
+        ],
+        "audiences": [{"name": "Parents", "vocabulary": ["paternity test"]}],
+        "locations": [{"name": "Manchester laboratory", "city": "Manchester", "country": "GB"}],
+        "competitors": [{"name": "Rival", "domain": "rival.test"}, {"name": "Other", "domain": "other.test"}],
+        "voice": {"tone": "Plain and calm", "forbidden_terminology": ["guaranteed"]},
+        "claims": [
+          {"claim": "Our laboratory is UKAS accredited.", "source": "UKAS 1234", "approve": true},
+          {"claim": "Our tests are 100% accurate.", "is_prohibited": true, "risk": "high"}
+        ]
+      },
+      "expect": [
+        {"path": "status", "op": "eq", "value": "completed"},
+        {"path": "outputs.brand_understanding.profile.services", "op": "len", "value": 2},
+        {"path": "outputs.brand_understanding.profile.audiences", "op": "eq", "value": ["Parents"]},
+        {"path": "outputs.brand_understanding.target_locations", "op": "len", "value": 1},
+        {"path": "outputs.brand_understanding.commercial_priorities", "op": "before", "value": "DNA testing", "other": "Ancestry testing"},
+        {"path": "outputs.brand_understanding.prohibited_claims", "op": "eq", "value": ["Our tests are 100% accurate."]},
+        {"path": "outputs.brand_understanding.approved_claims", "op": "eq", "value": ["Our laboratory is UKAS accredited."]},
+        {"path": "outputs.brand_understanding.completeness_score", "op": "eq", "value": 100.0},
+        {"path": "outputs.brand_understanding.seed_topics", "op": "contains", "value": "paternity test"},
+        {"path": "evidence", "op": "not_empty"}
+      ]
+    },
+    {
+      "name": "empty_graph_invents_nothing",
+      "brand": {"name": "Golden Empty"},
+      "expect": [
+        {"path": "status", "op": "eq", "value": "completed"},
+        {"path": "outputs.brand_understanding.seed_topics", "op": "empty"},
+        {"path": "outputs.brand_understanding.commercial_priorities", "op": "empty"},
+        {"path": "outputs.brand_understanding.completeness_score", "op": "lt", "value": 50},
+        {"path": "limitations", "op": "any_contains", "value": "no goals recorded"},
+        {"path": "limitations", "op": "any_contains", "value": "no services recorded"},
+        {"path": "recommendations", "op": "empty"}
+      ]
+    },
+    {
+      "name": "partial_competitors_are_counted_not_denied",
+      "brand": {
+        "name": "Golden One Rival",
+        "goals": [{"goal_type": "traffic", "description": "More organic visits"}],
+        "services": [{"name": "Courier delivery", "keywords": ["same day courier"]}],
+        "audiences": [{"name": "Retailers"}],
+        "voice": {"tone": "Direct"},
+        "competitors": [{"name": "Rival", "domain": "rival.test"}]
+      },
+      "expect": [
+        {"path": "limitations", "op": "any_contains", "value": "has 1 competitors recorded, fewer than the 2 expected"},
+        {"path": "limitations", "op": "none_contains", "value": "no competitors recorded"}
+      ]
+    },
+    {
+      "name": "health_brand_without_approved_claims_is_constrained",
+      "brand": {
+        "name": "Golden Clinic",
+        "risk_category": "health",
+        "services": [{"name": "Prenatal screening"}]
+      },
+      "expect": [
+        {"path": "limitations", "op": "any_contains", "value": "approved claims"},
+        {"path": "outputs.brand_understanding.approved_claims", "op": "empty"}
+      ]
+    }
+  ]
+}

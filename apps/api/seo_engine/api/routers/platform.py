@@ -61,6 +61,20 @@ async def list_integrations(
     )
 
 
+@router.delete("/brands/{brand_id}/integrations/{provider}")
+async def disconnect_integration(
+    brand_id: uuid.UUID,
+    provider: IntegrationProvider,
+    session: SessionDep,
+    principal: PrincipalDep,
+    request: Request,
+) -> dict:
+    connection = await IntegrationService(session, principal).disconnect(brand_id, provider)
+    return envelope(
+        serialize.integration_connection(connection), request_id=request.state.request_id
+    )
+
+
 @router.post("/brands/{brand_id}/integrations/{provider}/sync", status_code=202)
 async def sync_integration(
     brand_id: uuid.UUID,

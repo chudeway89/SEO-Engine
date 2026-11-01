@@ -34,7 +34,8 @@ variables that matter in production:
 | `TEMPORAL_ADDRESS` / `_NAMESPACE` / `_TASK_QUEUE` | required when `temporal`. |
 | `JWT_SECRET` | **must** be a strong random value; generate with `python -c "import secrets;print(secrets.token_urlsafe(48))"`. |
 | `CREDENTIAL_ENCRYPTION_KEY` | Fernet key protecting stored OAuth tokens and API keys; generate with `Fernet.generate_key()`. |
-| `LLM_PROVIDER` / `LLM_API_KEY` | `deterministic` runs with no model; set a real provider and key for narration. |
+| `LLM_PROVIDER` / `LLM_MODEL` / `LLM_BASE_URL` / `LLM_API_KEY` | Optional. `deterministic` (default) runs everything with no model. To connect any model: `openai_compatible` with the endpoint in `LLM_BASE_URL` (hosted or local; a key only if it needs one), or `anthropic` with a key. `LLM_MODEL` names the model and is required with any provider; there is no default. A model that fails never stops the platform; `/readyz` reports what is in use. |
+| `LLM_TEMPERATURE` / `LLM_*_PRICE_PER_MTOK` | Optional. Unset sends no temperature (the model's default applies) and records call cost as unknown rather than zero. |
 | `GOOGLE_CLIENT_ID` / `_SECRET` | enable the real Search Console and GA4 OAuth flow; without them those integrations run in development mode. |
 | `API_CORS_ORIGINS` | comma-separated allowed origins for the web app. |
 | `ENVIRONMENT` | `production` tightens defaults. |

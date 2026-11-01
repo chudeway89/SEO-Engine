@@ -200,7 +200,7 @@ class _StubProvider(LLMProvider):
         self.text = text
         self.received: list[LLMMessage] = []
 
-    async def complete(self, messages, *, model, temperature, max_tokens):
+    async def complete(self, messages, *, model, max_tokens, temperature=None):
         self.received = messages
         return LLMResponse(
             text=self.text,
@@ -223,7 +223,9 @@ async def test_a_model_draft_is_labelled_llm_and_parsed_into_sections() -> None:
         "## What it costs\n\nMore prose.\n"
     )
     provider = _StubProvider(markdown)
-    draft = await generate_draft(_brief(), gateway=ModelGateway(provider))
+    draft = await generate_draft(
+        _brief(), gateway=ModelGateway(provider, model="any-connected-model")
+    )
 
     assert draft.synthesis_mode == SynthesisMode.LLM.value
     assert draft.title == "What a DNA test costs"
@@ -235,7 +237,7 @@ async def test_a_model_draft_is_labelled_llm_and_parsed_into_sections() -> None:
 
 async def test_constraints_reach_the_model_on_the_developer_channel() -> None:
     provider = _StubProvider("# T\n\n## S\n\nBody.\n")
-    await generate_draft(_brief(), gateway=ModelGateway(provider))
+    await generate_draft(_brief(), gateway=ModelGateway(provider, model="any-connected-model"))
 
     channels = {m.channel for m in provider.received}
     assert "system" in channels
@@ -253,7 +255,11 @@ async def test_competitor_reference_material_reaches_the_model_as_untrusted() ->
         status_code=200,
     )
     provider = _StubProvider("# T\n\n## S\n\nBody.\n")
-    await generate_draft(_brief(), gateway=ModelGateway(provider), reference_pages=[page])
+    await generate_draft(
+        _brief(),
+        gateway=ModelGateway(provider, model="any-connected-model"),
+        reference_pages=[page],
+    )
 
     external = [m for m in provider.received if m.channel == "external_content"]
     assert external
@@ -448,3 +454,25 @@ def test_every_derivative_carries_its_platform_context_and_canonical_source() ->
 def test_an_unknown_platform_is_skipped_rather_than_guessed_at() -> None:
     assets = repurpose(_draft(_GOOD_BODY), platforms=["telepathy"], audience="x")
     assert assets == []
+
+
+def test_markdown_sections_are_split_at_level_two_headings() -> None:
+    from seo_engine.engines.content.generation import markdown_title, sections_from_markdown
+
+    text = "# Title\n\nIntro.\n\n## First\n\nOne.\n\n## Second\n\nTwo\nlines."
+    sections = sections_from_markdown(text)
+    assert [(s.heading, s.body) for s in sections] == [("First", "One."), ("Second", "Two\nlines.")]
+    assert markdown_title(text) == "Title"
+    assert sections_from_markdown("No headings at all.") == []
+
+
+def test_an_outline_stored_under_an_earlier_notice_wording_is_still_an_outline() -> None:
+    from seo_engine.engines.content.quality import is_outline
+    from seo_engine.schemas.content import ContentDraft
+
+    earlier = (
+        "# T\n\n> This is a structured outline, not finished prose. No language model is "
+        "configured, and SEO Engine will not generate article text it cannot ground."
+    )
+    draft = ContentDraft(title="T", meta_description="", slug="t", body_markdown=earlier)
+    assert is_outline(draft)

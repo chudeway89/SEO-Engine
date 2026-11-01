@@ -1,0 +1,38 @@
+id: CNT-005
+name: Content Optimisation Agent
+version: 1.0.0
+
+description: >
+  Turns each weak criterion in a draft's evaluation into a specific, reviewable
+  edit: the section to add, the brief question left unanswered, the internal
+  link missing, the structured data the brief calls for, the over-used term.
+  Edits are recorded as tracked repairs for a writer to apply; the evaluated
+  version is never changed.
+
+module: agent.py
+
+capabilities:
+  - content.edit.optimise
+
+tools:
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: ContentOptimisationInput
+output_schema: ContentOptimisationOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  deterministic_fallback: true
+
+prompt: agents/content/content-optimisation
+tags:
+  - content
+  - optimisation

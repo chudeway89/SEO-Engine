@@ -7,20 +7,25 @@ import {
   ApiError,
   addWebsite,
   connectIntegration,
+  disconnectIntegration,
   getBrand,
   listIntegrations,
   listMissions,
   listWebsites,
   planMission,
+  previewStrategy,
   runMission,
 } from "@/lib/api";
 import { Shell } from "@/components/Shell";
 import { Badge, Button, Card, Empty, ErrorNote, SectionTitle } from "@/components/ui";
-import type { Brand, Integration, Mission, Website } from "@/lib/types";
+import type { Brand, Integration, Mission, StrategyPreview, Website } from "@/lib/types";
 
 const PROVIDERS = [
   { id: "google_search_console", label: "Search Console" },
   { id: "google_analytics_4", label: "Analytics 4" },
+  { id: "serp_api", label: "SERP data" },
+  { id: "wordpress", label: "WordPress" },
+  { id: "generic_cms", label: "Development CMS" },
 ];
 
 export default function BrandDetailPage() {
@@ -35,6 +40,8 @@ export default function BrandDetailPage() {
   const [error, setError] = useState<ApiError | Error | null>(null);
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [objective, setObjective] = useState("Increase qualified organic leads");
+  const [preview, setPreview] = useState<StrategyPreview | null>(null);
+  const [previewing, setPreviewing] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -79,6 +86,30 @@ export default function BrandDetailPage() {
     }
   }
 
+  async function onDisconnect(provider: string) {
+    setError(null);
+    try {
+      await disconnectIntegration(brandId, provider);
+      await refresh();
+    } catch (err) {
+      setError(err as ApiError);
+    }
+  }
+
+  async function onPreview() {
+    setError(null);
+    setPreviewing(true);
+    try {
+      setPreview(
+        await previewStrategy(brandId, { objective, website_id: websites[0]?.id }),
+      );
+    } catch (err) {
+      setError(err as ApiError);
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
   async function onPlanAndRun(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -117,6 +148,12 @@ export default function BrandDetailPage() {
           {brand.risk_category !== "general" && (
             <Badge tone="warn">{brand.risk_category} category</Badge>
           )}
+          <Link
+            href={`/brands/${brandId}/content`}
+            className="ml-auto rounded border border-border px-3 py-1.5 text-sm hover:bg-surface-2"
+          >
+            Content
+          </Link>
         </div>
         <p className="mt-1 text-sm text-text-dim">
           {brand.description || brand.industry || "No description recorded."}
@@ -157,7 +194,9 @@ export default function BrandDetailPage() {
           <SectionTitle>Integrations</SectionTitle>
           <div className="space-y-2">
             {PROVIDERS.map((p) => {
-              const connected = integrations.find((i) => i.provider === p.id);
+              const connected = integrations.find(
+                (i) => i.provider === p.id && i.status === "connected",
+              );
               return (
                 <div key={p.id} className="flex items-center justify-between text-sm">
                   <span>{p.label}</span>
@@ -168,6 +207,9 @@ export default function BrandDetailPage() {
                       ) : (
                         <Badge tone="good">connected</Badge>
                       )}
+                      <Button variant="ghost" onClick={() => onDisconnect(p.id)}>
+                        Disconnect
+                      </Button>
                     </span>
                   ) : (
                     <Button variant="ghost" onClick={() => onConnect(p.id)}>
@@ -177,7 +219,9 @@ export default function BrandDetailPage() {
                 </div>
               );
             })}
-            {integrations.some((i) => i.mode === "development_adapter") && (
+            {integrations.some(
+              (i) => i.status === "connected" && i.mode === "development_adapter",
+            ) && (
               <p className="mt-2 text-xs text-amber-300/80">
                 A provider is connected through the development adapter. Every figure it
                 produces is synthetic demonstration data and is labelled as such — it does
@@ -197,6 +241,9 @@ export default function BrandDetailPage() {
             onChange={(e) => setObjective(e.target.value)}
             required
           />
+          <Button variant="ghost" onClick={onPreview} disabled={previewing}>
+            {previewing ? "Previewing…" : "Preview plan"}
+          </Button>
           <Button type="submit" disabled={websites.length === 0}>
             Plan &amp; run
           </Button>
@@ -204,6 +251,7 @@ export default function BrandDetailPage() {
             <span className="text-xs text-text-dim">Add a website first.</span>
           )}
         </form>
+        {preview && <StrategyPanel preview={preview} />}
       </Card>
 
       <div className="mt-4">
@@ -231,6 +279,58 @@ export default function BrandDetailPage() {
         )}
       </div>
     </Shell>
+  );
+}
+
+function StrategyPanel({ preview }: { preview: StrategyPreview }) {
+  const { strategy } = preview;
+  return (
+    <div className="mt-4 border-t border-border pt-4 text-sm">
+      <p>{preview.summary}</p>
+      <p className="mt-1 text-xs text-text-dim">
+        A preview from the strategy orchestrator (ORCH-001). It is a recorded agent run and
+        creates no mission.
+        {strategy.mission_type ? ` Mission type: ${strategy.mission_type}.` : ""}
+        {strategy.target_metric ? ` Target metric: ${strategy.target_metric}.` : ""}
+      </p>
+      <div className="mt-3 grid gap-4 lg:grid-cols-2">
+        <div>
+          <div className="mb-1 text-xs font-semibold uppercase text-text-dim">
+            Stages that would run ({strategy.stages?.length ?? 0})
+          </div>
+          <ol className="list-decimal space-y-1 pl-5">
+            {(strategy.stages ?? []).map((s) => (
+              <li key={s.stage}>
+                <span className="font-medium">{s.stage.replace(/_/g, " ")}</span>{" "}
+                <span className="text-xs text-text-dim">
+                  {s.agent_id} — {s.reason}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <div>
+          <div className="mb-1 text-xs font-semibold uppercase text-text-dim">
+            Left out, and why ({strategy.excluded?.length ?? 0})
+          </div>
+          <ul className="space-y-1">
+            {(strategy.excluded ?? []).map((s) => (
+              <li key={s.stage}>
+                <span className="font-medium">{s.stage.replace(/_/g, " ")}</span>{" "}
+                <span className="text-xs text-text-dim">— {s.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      {preview.limitations.length > 0 && (
+        <ul className="mt-3 list-disc pl-5 text-xs text-amber-200/90">
+          {preview.limitations.map((l) => (
+            <li key={l}>{l}</li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

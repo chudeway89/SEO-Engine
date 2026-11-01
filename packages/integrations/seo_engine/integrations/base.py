@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from seo_engine.schemas.enums import IntegrationMode, IntegrationProvider, IntegrationStatus
+from seo_engine.shared.errors import IntegrationError
 
 DEVELOPMENT_NOTICE = (
     "SYNTHETIC DEVELOPMENT DATA — this response came from SEO Engine's development "
@@ -162,6 +163,29 @@ class AnalyticsAdapter(ProviderAdapter):
     ) -> ProviderResponse: ...
 
 
+class SERPAdapter(ProviderAdapter):
+    """Search engine result pages.
+
+    One call returns one observed results page for one query, in the provider's
+    raw shape; :func:`seo_engine.integrations.serp.adapters.normalise_serp` turns
+    it into a ``SERPSnapshot``. Nothing here estimates rankings: a page the
+    provider did not return is simply absent.
+    """
+
+    provider = IntegrationProvider.SERP_API
+
+    @abstractmethod
+    async def search(
+        self,
+        *,
+        query: str,
+        country: str | None = None,
+        language: str | None = None,
+        device: str = "desktop",
+        num: int = 10,
+    ) -> ProviderResponse: ...
+
+
 class CMSAdapter(ProviderAdapter):
     """Content management systems.
 
@@ -184,6 +208,26 @@ class CMSAdapter(ProviderAdapter):
 
     @abstractmethod
     async def get_content(self, *, external_id: str) -> ProviderResponse: ...
+
+    # -- live pages ----------------------------------------------------------
+    # Applying an approved change to a page that is already live. Not every CMS
+    # exposes this, so the default refuses explicitly rather than pretending: an
+    # executor reports the refusal and the action stays unexecuted.
+    async def find_page(self, *, url: str) -> ProviderResponse:
+        """Locate a live page by URL. Payload: id, type, link, title, content."""
+        raise IntegrationError(
+            f"{self.provider.value} does not support locating live pages through this adapter",
+            {"supported": False, "operation": "find_page"},
+        )
+
+    async def update_page(
+        self, *, external_id: str, page_type: str, fields: dict[str, Any]
+    ) -> ProviderResponse:
+        """Change fields (``title``, ``content``) of a live page found by ``find_page``."""
+        raise IntegrationError(
+            f"{self.provider.value} does not support changing live pages through this adapter",
+            {"supported": False, "operation": "update_page"},
+        )
 
 
 __all__ = [

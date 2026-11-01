@@ -1,0 +1,38 @@
+id: RES-005
+name: Question Research Agent
+version: 1.0.0
+
+description: >
+  Gathers the questions the audience asks from Search Console queries, observed
+  people-also-ask results and the brand's own audience vocabulary; keeps every
+  source and the weakest provenance for each; and maps each question to the page
+  that already answers it, so unanswered questions are visible as gaps.
+
+module: agent.py
+
+capabilities:
+  - research.questions
+
+tools:
+  - gsc
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: QuestionResearchInput
+output_schema: QuestionResearchOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  deterministic_fallback: true
+
+prompt: agents/research/question-research
+tags:
+  - research
+  - questions

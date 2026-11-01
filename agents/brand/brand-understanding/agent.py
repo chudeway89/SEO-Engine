@@ -84,9 +84,17 @@ class BrandUnderstandingAgent(BaseAgent):
         missing = [d.dimension for d in completeness if not d.complete]
         for dimension in completeness:
             if not dimension.complete:
-                workspace.limitation(
-                    f"The brand has no {dimension.dimension} recorded. {dimension.detail}"
+                # Say what is actually recorded: "none" and "fewer than needed"
+                # are different statements.
+                recorded = (
+                    f"The brand has no {dimension.dimension} recorded."
+                    if dimension.present == 0
+                    else (
+                        f"The brand has {dimension.present} {dimension.dimension} recorded, "
+                        f"fewer than the {dimension.expected_minimum} expected."
+                    )
                 )
+                workspace.limitation(f"{recorded} {dimension.detail}")
 
         workspace.find(
             key="brand.completeness",

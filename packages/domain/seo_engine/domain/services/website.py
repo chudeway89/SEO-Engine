@@ -458,6 +458,44 @@ class WebsiteService:
     async def count_pages(self, website_id: uuid.UUID) -> int:
         return await self.pages.count(Page.website_id == website_id)
 
+    async def list_links(
+        self, website_id: uuid.UUID, *, internal_only: bool = True, limit: int = 5000
+    ) -> list[PageLink]:
+        """The observed link graph, as the architecture and on-page agents read it."""
+        self.principal.require(P_WEBSITE_READ)
+        await self.websites.get_or_raise(website_id)
+        repo = repository_for(PageLink)(self.session, self.principal.tenant_id)
+        filters: list[Any] = [PageLink.website_id == website_id]
+        if internal_only:
+            filters.append(PageLink.is_internal.is_(True))
+        return list(await repo.list(*filters, limit=limit))
+
+    async def schema_types_by_page(self, website_id: uuid.UUID) -> dict[str, list[str]]:
+        """URL → the structured-data types observed on it."""
+        self.principal.require(P_WEBSITE_READ)
+        repo = repository_for(PageSchemaBlock)(self.session, self.principal.tenant_id)
+        blocks = await repo.list(PageSchemaBlock.website_id == website_id, limit=5000)
+        url_by_page = {
+            page.id: page.url
+            for page in await self.pages.list(Page.website_id == website_id, limit=5000)
+        }
+        types: dict[str, list[str]] = {}
+        for block in blocks:
+            url = url_by_page.get(block.page_id)
+            if url and block.schema_type:
+                types.setdefault(url, []).append(block.schema_type)
+        return types
+
+    async def latest_completed_crawl(self, website_id: uuid.UUID) -> CrawlJob | None:
+        self.principal.require(P_WEBSITE_READ)
+        rows = await self.jobs.list(
+            CrawlJob.website_id == website_id,
+            CrawlJob.status.in_([CrawlJobStatus.COMPLETED, CrawlJobStatus.PARTIAL]),
+            limit=1,
+            order_by=CrawlJob.created_at.desc(),
+        )
+        return rows[0] if rows else None
+
     async def replace_issues(
         self, website_id: uuid.UUID, crawl_job_id: uuid.UUID | None, issues: list[SEOIssue]
     ) -> list[PageIssue]:

@@ -164,3 +164,17 @@ def test_opportunity_score_uses_the_documented_internal_weighting() -> None:
     # 100*0.30 + 100*0.20 = 50
     assert breakdown.opportunity_score == pytest.approx(50.0)
     assert sum(breakdown.weights.values()) == pytest.approx(1.0)
+
+
+def test_an_agent_cannot_pin_a_model_or_require_one() -> None:
+    """Model-agnostic and model-optional, enforced at manifest load."""
+    import pytest
+    from pydantic import ValidationError
+    from seo_engine.schemas.agent import ModelPolicy
+
+    assert ModelPolicy().deterministic_fallback is True
+    for knob in ({"temperature": 0.2}, {"reasoning": "high"}, {"model": "some-model"}):
+        with pytest.raises(ValidationError):
+            ModelPolicy.model_validate(knob)
+    with pytest.raises(ValidationError, match="without a language model"):
+        ModelPolicy(deterministic_fallback=False)

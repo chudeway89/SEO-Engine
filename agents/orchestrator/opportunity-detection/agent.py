@@ -16,6 +16,7 @@ from seo_engine.agent_runtime.base import AgentWorkspace, BaseAgent
 from seo_engine.engines.opportunities.detection import (
     from_content_gaps,
     from_keyword_positions,
+    from_seeds,
     from_technical_issues,
 )
 from seo_engine.schemas.agent import AgentContext
@@ -152,6 +153,22 @@ class OpportunityDetectionAgent(BaseAgent):
             positional = from_keyword_positions(records, evidence_ref=evidence.id)
             detected.extend(positional)
             by_source["search_console"] = len(positional)
+
+        # --- from the analysis stages ------------------------------------------
+        # On-page, indexability, intent, architecture, question and competitive
+        # stages hand their opportunities over as evidenced seeds.
+        seeds = upstream.get("opportunity_seeds") or []
+        if seeds:
+            seeded, refused = from_seeds(seeds)
+            detected.extend(seeded)
+            for item in seeded:
+                source = str(item.data.get("source_agent") or "analysis")
+                by_source[source] = by_source.get(source, 0) + 1
+            if refused:
+                workspace.limitation(
+                    f"{refused} upstream opportunity seed(s) cited no evidence and were "
+                    "refused rather than recorded."
+                )
 
         if not detected:
             workspace.limitation(

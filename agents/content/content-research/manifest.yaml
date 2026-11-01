@@ -1,0 +1,38 @@
+id: CNT-002
+name: Content Research Agent
+version: 1.0.0
+
+description: >
+  Assembles the research pack for each scheduled topic from what the platform
+  has observed: the audience questions that bear on it, the entities and keywords
+  in its cluster, how the observed results page treats it, and the registered
+  sources that support it, with their tier and verification status. It searches
+  nothing new and invents no fact.
+
+module: agent.py
+
+capabilities:
+  - content.research
+
+tools:
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: ContentResearchInput
+output_schema: ContentResearchOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  deterministic_fallback: true
+
+prompt: agents/content/content-research
+tags:
+  - content
+  - research

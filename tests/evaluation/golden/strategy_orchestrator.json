@@ -1,0 +1,48 @@
+{
+  "agent_id": "ORCH-001",
+  "description": "ORCH-001: classifies the objective, selects only the stages the brand can support, gives a reason for every exclusion, delegates through next tasks and never acts.",
+  "cases": [
+    {
+      "name": "lead_mission_without_integrations",
+      "brand": {"services": [{"name": "DNA testing"}]},
+      "inputs": {"objective": "Increase qualified organic leads"},
+      "expect": [
+        {"path": "outputs.strategy.mission_type", "op": "eq", "value": "qualified_leads"},
+        {"path": "outputs.strategy.target_metric", "op": "eq", "value": "qualified_organic_leads"},
+        {"path": "outputs.strategy.excluded", "op": "any_contains", "value": "serp_research"},
+        {"path": "outputs.strategy.excluded", "op": "any_contains", "value": "website_audit"},
+        {"path": "outputs.strategy.excluded", "op": "any_contains", "value": "nothing has been estimated"},
+        {"path": "next_tasks", "op": "not_empty"},
+        {"path": "actions", "op": "empty"},
+        {"path": "recommendations", "op": "any_contains", "value": "google_analytics_4"}
+      ]
+    },
+    {
+      "name": "content_production_objective",
+      "brand": {"website": "https://golden.test", "integrations": ["serp_api"]},
+      "inputs": {"objective": "Write and publish guides about prenatal screening"},
+      "expect": [
+        {"path": "outputs.strategy.mission_type", "op": "eq", "value": "content_production"},
+        {"path": "outputs.strategy.target_metric", "op": "eq", "value": null},
+        {"path": "limitations", "op": "any_contains", "value": "no single measurable target"}
+      ]
+    },
+    {
+      "name": "falls_back_to_the_top_goal",
+      "brand": {"goals": [{"goal_type": "technical", "description": "Recover from the indexing drop", "priority": 1}]},
+      "expect": [
+        {"path": "outputs.strategy.objective", "op": "eq", "value": "Recover from the indexing drop"},
+        {"path": "outputs.strategy.mission_type", "op": "eq", "value": "technical_recovery"},
+        {"path": "limitations", "op": "any_contains", "value": "planning for the brand's top goal"}
+      ]
+    },
+    {
+      "name": "no_objective_and_no_goal_plans_nothing",
+      "brand": {},
+      "expect": [
+        {"path": "next_tasks", "op": "empty"},
+        {"path": "limitations", "op": "any_contains", "value": "nothing to plan"}
+      ]
+    }
+  ]
+}

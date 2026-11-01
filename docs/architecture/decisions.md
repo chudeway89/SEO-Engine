@@ -142,17 +142,31 @@ presented as facts.
 
 ---
 
-## ADR-0008 — Planned: the LLM is optional, and outputs say which path produced them
+## ADR-0008 — The model is optional and interchangeable, and outputs say which path produced them
 
-**Context.** The vertical slice must run in development without an LLM API key,
-but a deterministic stand-in must never be mistaken for model output or for real
-external data.
+**Context.** The platform must run in full without any language model, must
+work with whichever model an operator connects, and a deterministic stand-in
+must never be mistaken for model output or for real external data.
 
-**Decision (recorded now, implemented with the agent runtime).** A model gateway
-with `anthropic`, `openai` and `deterministic` providers. The deterministic
-provider composes structured output from the run's own observed inputs only — it
-invents no external facts. Every `AgentResult` carries `synthesis_mode`
-(`llm` / `deterministic` / `hybrid`), persisted on `agent_runs`, so the UI can
-label how a narrative was produced. Manifests declare
-`model_policy.deterministic_fallback` per agent; agents whose output is
-genuinely generative (the content writer) will not silently degrade.
+**Decision.** A single model gateway that is protocol-based, not model-based:
+`deterministic` (no model, the default), `openai_compatible` (any Chat
+Completions endpoint, hosted or local), `anthropic` (any model on the Messages
+API), and any provider registered at runtime. There is no default model: the
+operator names it (`LLM_MODEL`). No agent can pin a model or tune one — agent
+manifests carry no model, temperature or reasoning settings — and every agent
+must declare a deterministic path (`deterministic_fallback: true`, enforced at
+load). The model only writes prose inside constraints the deterministic path
+decided; it never produces a figure, a decision or an action.
+
+A configured model that fails, is unreachable, is misconfigured or returns
+nothing usable is handled like no model: the writer produces the outline and
+the run states why; it never stops a mission. Every `AgentResult` carries
+`synthesis_mode` (`llm` / `deterministic` / `hybrid`), and every model call is
+recorded in `llm_usage` against its run, with tokens and cost `NULL` when the
+provider did not report them or the operator configured no price — no built-in
+price list, so no stale figures.
+
+**Consequences.** Swapping models is configuration, not code. Behaviour that a
+particular model needs (a parameter it rejects) is handled by adapting to the
+provider's own error, not by naming models in code. A deployment without a
+model loses prose drafting and nothing else.

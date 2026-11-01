@@ -1,12 +1,20 @@
 """EXE-001 — Execution Agent.
 
-Turns approved recommendations into concrete actions and executes the ones that
-are already approved.
+Turns recommendations into concrete actions and executes the ones a person has
+approved.
 
 It never decides strategy and never grants its own permission. Every action it
-proposes goes through the policy engine, and it refuses to execute anything
-whose approval requirement has not been satisfied — the domain service raises,
-and this agent reports the block rather than working around it.
+proposes goes through the policy engine, and every action type its manifest
+lists in ``approval_required_for`` needs a human approval whatever policy says —
+the stricter of the two always wins. It refuses to execute anything whose
+approval has not been given; the decision service re-checks at the moment of
+execution, and this agent reports the block rather than working around it.
+
+Execution goes through the brand's connected CMS adapter and applies exactly
+the change that was approved: the title an on-page finding proposed, the links a
+cluster finding named. A recommendation without a concrete change, or a change
+the platform has no safe executor for, is reported and left approved for a
+person — never guessed at, and never marked executed.
 """
 
 from __future__ import annotations
@@ -16,22 +24,80 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 from seo_engine.agent_runtime.base import AgentWorkspace, BaseAgent
+from seo_engine.integrations.cms.changes import (
+    EXECUTABLE,
+    ChangeNotSpecified,
+    ChangeNotSupported,
+    apply_change,
+    missing_specification,
+)
 from seo_engine.schemas.agent import AgentContext, ProposedAction
 from seo_engine.schemas.enums import (
+    ActionStatus,
     ActionType,
+    DataProvenance,
     EvidenceType,
-    IntegrationProvider,
     RecommendationStatus,
     RiskLevel,
     SynthesisMode,
 )
-from seo_engine.shared.errors import ApprovalRequiredError, PolicyViolationError
+from seo_engine.shared.errors import (
+    ApprovalRequiredError,
+    ConflictError,
+    IntegrationError,
+    IntegrationNotConnectedError,
+    PolicyViolationError,
+)
+
+#: Actions already settled are reported, never re-run.
+SETTLED = frozenset(
+    {
+        ActionStatus.EXECUTED.value,
+        ActionStatus.REJECTED.value,
+        ActionStatus.CANCELLED.value,
+        ActionStatus.FAILED.value,
+    }
+)
+DRAFT_ACTIONS = frozenset({ActionType.CMS_CREATE_DRAFT.value, ActionType.CONTENT_UPDATE.value})
+
+
+class _CMSResolver:
+    """The brand's connected CMS adapter, resolved at most once per run.
+
+    Per-run state lives here, not on the agent: one agent instance serves every
+    run, so nothing run-specific may be stored on ``self``.
+    """
+
+    def __init__(self, context: AgentContext, workspace: AgentWorkspace, brand_id: Any) -> None:
+        self.context, self.workspace, self.brand_id = context, workspace, brand_id
+        self._resolved = False
+        self._adapter: Any = None
+
+    async def get(self) -> Any:
+        if self._resolved:
+            return self._adapter
+        self._resolved = True
+        if not self.workspace.note_unavailable_tool("cms"):
+            return None
+        adapter = self.context.services.get("cms")
+        if adapter is None:
+            try:
+                _, adapter = await self.context.service("integrations").cms_adapter(self.brand_id)
+            except IntegrationNotConnectedError:
+                self.workspace.limitation(
+                    "No content management system is connected for this brand, so "
+                    "approved changes could not be applied."
+                )
+                return None
+        self._adapter = adapter
+        return adapter
 
 
 class ExecutionPlanInput(BaseModel):
     brand_id: UUID
     mission_id: UUID | None = None
     execute_approved: bool = True
+    draft: dict[str, Any] | None = None
 
 
 class ExecutionPlanOutput(BaseModel):
@@ -39,7 +105,10 @@ class ExecutionPlanOutput(BaseModel):
     actions_proposed: int = 0
     actions_awaiting_approval: int = 0
     actions_executed: int = 0
+    actions_settled: int = 0
+    not_executable: list[dict[str, str]] = Field(default_factory=list)
     blocked: list[dict[str, str]] = Field(default_factory=list)
+    executed: list[dict[str, Any]] = Field(default_factory=list)
     actions: list[dict[str, Any]] = Field(default_factory=list)
 
 
@@ -61,10 +130,9 @@ class ExecutionAgent(BaseAgent):
             workspace.limitation("There are no recommendations to plan execution for.")
             return "No recommendations are available, so no execution plan was produced."
 
+        output = ExecutionPlanOutput(brand_id=str(payload.brand_id))
         actions: list[Any] = []
-        awaiting = 0
-        executed = 0
-        blocked: list[dict[str, str]] = []
+        cms = _CMSResolver(context, workspace, payload.brand_id)
 
         for recommendation in [*approved, *proposed_only]:
             spec = recommendation.proposed_action or {}
@@ -79,6 +147,7 @@ class ExecutionAgent(BaseAgent):
                 payload={
                     "recommendation": recommendation.title,
                     "reason": recommendation.reason,
+                    "change": spec.get("change"),
                 },
                 recommendation_id=recommendation.id,
                 mission_id=payload.mission_id,
@@ -86,10 +155,8 @@ class ExecutionAgent(BaseAgent):
                 risk=RiskLevel(recommendation.risk),
                 risk_category=(spec.get("attributes") or {}).get("category", "general"),
                 automation_policy=context.policy.automation_policy,
-                provider=IntegrationProvider.GENERIC_CMS.value
-                if action_type.startswith("cms.")
-                else None,
                 correlation_id=context.correlation_id,
+                approval_floor=self._floor(action_type),
             )
             actions.append(action)
             workspace.actions.append(
@@ -102,113 +169,172 @@ class ExecutionAgent(BaseAgent):
                 )
             )
 
-            if action.approval_required and action.approved_by is None:
-                awaiting += 1
+            if action.status in SETTLED:
+                output.actions_settled += 1
                 continue
-
+            if action.approval_required and action.approved_by is None:
+                output.actions_awaiting_approval += 1
+                continue
             if not payload.execute_approved:
                 continue
 
             try:
-                executed += await self._execute(context, workspace, decisions, action)
-            except (ApprovalRequiredError, PolicyViolationError) as exc:
-                blocked.append({"action": action_type, "reason": exc.message})
+                result = await self._execute(workspace, decisions, action, payload, cms)
+            except (ApprovalRequiredError, PolicyViolationError, ConflictError) as exc:
+                output.blocked.append({"action": action_type, "reason": exc.message})
                 workspace.find(
                     key="execution.blocked",
                     title=f"Action blocked: {action_type}",
                     detail=exc.message,
                     severity="info",
                 )
+                continue
+            if isinstance(result, str):
+                output.not_executable.append(
+                    {"action_id": str(action.id), "action": action_type, "reason": result}
+                )
+            elif result is not None:
+                output.executed.append(result)
+
+        output.actions_proposed = len(actions)
+        output.actions_executed = len(output.executed)
+        output.actions = [
+            {
+                "id": str(a.id),
+                "type": a.action_type,
+                "status": a.status,
+                "approval_required": a.approval_required,
+                "policy_reason": (a.policy_decision or {}).get("reason"),
+            }
+            for a in actions
+        ]
+        for item in output.not_executable:
+            workspace.limitation(
+                f"Approved {item['action']} was not executed: {item['reason']}. It remains "
+                "approved for a person to apply."
+            )
 
         workspace.observe(
             evidence_type=EvidenceType.SYSTEM,
             source="execution_agent",
             reference=f"brand:{payload.brand_id}",
             observation=(
-                f"Planned {len(actions)} action(s): {executed} executed, {awaiting} "
-                f"awaiting human approval, {len(blocked)} blocked by policy."
+                f"Planned {len(actions)} action(s): {output.actions_executed} executed, "
+                f"{output.actions_awaiting_approval} awaiting human approval, "
+                f"{len(output.not_executable)} approved but not executable as specified, "
+                f"{len(output.blocked)} blocked, {output.actions_settled} already settled."
             ),
             data={
                 "proposed": len(actions),
-                "executed": executed,
-                "awaiting_approval": awaiting,
-                "blocked": len(blocked),
+                "executed": output.actions_executed,
+                "awaiting_approval": output.actions_awaiting_approval,
+                "not_executable": len(output.not_executable),
+                "blocked": len(output.blocked),
             },
-        )
-
-        output = ExecutionPlanOutput(
-            brand_id=str(payload.brand_id),
-            actions_proposed=len(actions),
-            actions_awaiting_approval=awaiting,
-            actions_executed=executed,
-            blocked=blocked,
-            actions=[
-                {
-                    "id": str(a.id),
-                    "type": a.action_type,
-                    "status": a.status,
-                    "approval_required": a.approval_required,
-                    "policy_reason": (a.policy_decision or {}).get("reason"),
-                }
-                for a in actions
-            ],
+            provenance=DataProvenance.OBSERVED,
         )
         workspace.outputs["execution_plan"] = output.model_dump(mode="json")
         workspace.metrics["actions_proposed"] = float(len(actions))
-        workspace.metrics["actions_executed"] = float(executed)
+        workspace.metrics["actions_executed"] = float(output.actions_executed)
 
         return (
-            f"Planned {len(actions)} action(s). {executed} were executed under existing "
-            f"approval, {awaiting} await human approval, and {len(blocked)} were blocked "
-            "by policy. Nothing was executed without the approval its policy required."
+            f"Planned {len(actions)} action(s). {output.actions_executed} were executed under "
+            f"existing approval, {output.actions_awaiting_approval} await human approval, "
+            f"{len(output.not_executable)} are approved but cannot be applied as specified, and "
+            f"{len(output.blocked)} were blocked. Nothing was executed without the approval "
+            "its policy and this agent's manifest required."
         )
+
+    def _floor(self, action_type: str) -> str | None:
+        """The manifest's approval requirement, enforced whatever policy allows."""
+        if action_type in self.manifest.approval_required_for:
+            return f"{self.manifest.id} declares {action_type} as requiring human approval"
+        return None
 
     async def _execute(
-        self, context: AgentContext, workspace: AgentWorkspace, decisions: Any, action: Any
-    ) -> int:
-        """Execute one approved action through the integration layer."""
-        if action.action_type not in {
-            ActionType.CMS_CREATE_DRAFT.value,
-            ActionType.CONTENT_UPDATE.value,
-        }:
-            # Everything else needs a connector this build does not implement;
-            # say so rather than pretending it ran.
-            workspace.limitation(
-                f"No executor is implemented for {action.action_type}; the action "
-                "remains approved and pending an implementation."
-            )
-            return 0
+        self,
+        workspace: AgentWorkspace,
+        decisions: Any,
+        action: Any,
+        payload: Any,
+        resolver: _CMSResolver,
+    ) -> dict[str, Any] | str | None:
+        """Apply one approved action. Returns the result, a reason it cannot run, or None."""
+        change = (action.payload or {}).get("change") or {}
 
-        if not workspace.note_unavailable_tool("cms"):
-            return 0
-
-        cms = context.services.get("cms")
-        if cms is None:
-            workspace.limitation(
-                "No CMS adapter was provided to this run, so approved content actions "
-                "could not be executed."
-            )
-            return 0
-
-        await decisions.mark_executing(action.id)
-        draft = context.inputs.get("draft") or {}
-        response = await cms.create_draft(
-            title=draft.get("title") or action.payload.get("recommendation", "Untitled"),
-            body_markdown=draft.get("body_markdown", ""),
-            slug=draft.get("slug", "draft"),
-            metadata={"meta_description": draft.get("meta_description", "")},
-        )
-        await decisions.mark_executed(
-            action.id,
-            {
+        if action.action_type in DRAFT_ACTIONS:
+            draft = payload.draft or {}
+            if not str(draft.get("body_markdown") or "").strip():
+                return (
+                    "no written draft accompanies it; the content production mission writes "
+                    "the draft, and an empty CMS draft is never created"
+                )
+            cms = await resolver.get()
+            if cms is None:
+                return None
+            await decisions.mark_executing(action.id)
+            try:
+                response = await cms.create_draft(
+                    title=draft.get("title") or action.payload.get("recommendation", "Untitled"),
+                    body_markdown=draft["body_markdown"],
+                    slug=draft.get("slug", "draft"),
+                    metadata={"meta_description": draft.get("meta_description", "")},
+                )
+            except IntegrationError as exc:
+                await decisions.mark_failed(action.id, exc.message)
+                return None
+            result = {
                 "external_id": response.payload.get("id"),
                 "status": response.payload.get("status"),
                 "link": response.payload.get("link"),
                 "notice": response.notice,
-            },
-            mode=response.mode.value,
+            }
+            await decisions.mark_executed(action.id, result, mode=response.mode.value)
+            return {"action_id": str(action.id), "action": action.action_type, **result}
+
+        reason = missing_specification(action.action_type, action.target or {}, change)
+        if reason is not None or action.action_type not in EXECUTABLE:
+            return reason or f"no executor exists for {action.action_type}"
+
+        cms = await resolver.get()
+        if cms is None:
+            return None
+        await decisions.mark_executing(action.id)
+        try:
+            applied = await apply_change(
+                cms, action_type=action.action_type, target=action.target or {}, change=change
+            )
+        except (ChangeNotSpecified, ChangeNotSupported) as exc:
+            await decisions.mark_failed(action.id, str(exc), retryable=False)
+            return str(exc)
+        except IntegrationError as exc:
+            await decisions.mark_failed(action.id, exc.message)
+            workspace.limitation(
+                f"{action.action_type} on {(action.target or {}).get('url')} failed in the CMS: "
+                f"{exc.message}."
+            )
+            return None
+        await decisions.mark_executed(action.id, applied.as_dict(), mode=applied.mode)
+        workspace.observe(
+            evidence_type=EvidenceType.API_DATA,
+            source="cms",
+            reference=str((action.target or {}).get("url") or action.id),
+            observation=(
+                f"Applied approved {action.action_type}: {len(applied.applied)} change(s) "
+                f"written, {len(applied.skipped)} skipped"
+                + (" in the development CMS adapter (no real site)." if applied.notice else ".")
+            ),
+            data=applied.as_dict(),
+            provenance=(
+                DataProvenance.SYNTHETIC_DEMO if applied.notice else DataProvenance.OBSERVED
+            ),
         )
-        return 1
+        if applied.notice:
+            workspace.limitation(
+                "The CMS is the development adapter: applied changes exist only in its "
+                "in-memory store. Nothing reached a real website."
+            )
+        return {"action_id": str(action.id), "action": action.action_type, **applied.as_dict()}
 
 
 AGENT = ExecutionAgent

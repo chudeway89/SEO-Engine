@@ -1,0 +1,40 @@
+id: RES-006
+name: Source and Evidence Agent
+version: 1.0.0
+
+description: >
+  Builds the brand's source register. Collects candidate sources from the
+  brand's approved claims and from the external pages its own site cites, tiers
+  each against the source trust hierarchy, verifies a bounded number by fetching
+  them, and reports which approved claims rest on no verified source. A source
+  is marked verified only if the platform fetched it.
+
+module: agent.py
+
+capabilities:
+  - research.sources
+  - website.crawl
+
+tools:
+  - crawler
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: SourceEvidenceInput
+output_schema: SourceEvidenceOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  deterministic_fallback: true
+
+prompt: agents/research/source-evidence
+tags:
+  - research
+  - sources

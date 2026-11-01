@@ -6,6 +6,7 @@ from fastapi import APIRouter, Request
 from seo_engine.api.envelope import envelope
 from seo_engine.shared.config import get_settings
 from seo_engine.shared.db import get_sessionmaker
+from seo_engine.shared.llm import get_gateway
 from sqlalchemy import text
 
 router = APIRouter(tags=["health"])
@@ -22,7 +23,10 @@ async def healthz(request: Request) -> dict:
 
 @router.get("/readyz")
 async def readyz(request: Request) -> dict:
-    """The process can serve traffic: the database answers."""
+    """The process can serve traffic: the database answers.
+
+    The language model is reported, not required.
+    """
     database = "ok"
     try:
         maker = get_sessionmaker()
@@ -33,6 +37,13 @@ async def readyz(request: Request) -> dict:
 
     ready = database == "ok"
     return envelope(
-        {"status": "ready" if ready else "degraded", "checks": {"database": database}},
+        {
+            "status": "ready" if ready else "degraded",
+            "checks": {"database": database},
+            # Informational, never a readiness condition: the platform runs
+            # fully without a model. Says which model (if any) is in use, and
+            # why a configured one is not usable.
+            "language_model": get_gateway().status(),
+        },
         request_id=getattr(request.state, "request_id", ""),
     )

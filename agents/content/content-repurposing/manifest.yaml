@@ -1,0 +1,37 @@
+id: CNT-008
+name: Content Repurposing Agent
+version: 1.0.0
+
+description: >
+  Derives platform assets (social posts, email, FAQ and more) from a canonical
+  piece that has passed the quality gate. Every derivative names its canonical
+  source and carries its own audience, objective, format, tone and call to
+  action. Derivatives are stored as drafts; outlines are never repurposed.
+
+module: agent.py
+
+capabilities:
+  - content.write.repurpose
+
+tools:
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: ContentRepurposingInput
+output_schema: ContentRepurposingOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  deterministic_fallback: true
+
+prompt: agents/content/content-repurposing
+tags:
+  - content
+  - repurposing

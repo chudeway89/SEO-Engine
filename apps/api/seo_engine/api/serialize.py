@@ -487,3 +487,103 @@ def evidence_row(row: Any) -> dict[str, Any]:
         "agent_id": row.agent_id,
         "observed_at": _iso(row.observed_at),
     }
+
+
+def content_asset(row: Any) -> dict[str, Any]:
+    return {
+        "id": str(row.id),
+        "brand_id": str(row.brand_id),
+        "title": row.title,
+        "asset_type": row.asset_type,
+        "slug": row.slug,
+        "url": row.url,
+        "status": row.status,
+        "risk_category": row.risk_category,
+        "current_version": row.current_version,
+        "primary_keyword": row.primary_keyword,
+        "external_ref": row.external_ref or {},
+        "is_synthetic": row.is_synthetic,
+        "published_at": _iso(row.published_at),
+        "created_at": _iso(row.created_at),
+    }
+
+
+def content_version(row: Any) -> dict[str, Any]:
+    return {
+        "id": str(row.id),
+        "version": row.version,
+        "title": row.title,
+        "meta_description": row.meta_description,
+        "body_markdown": row.body_markdown,
+        "word_count": row.word_count,
+        "change_summary": row.change_summary,
+        "synthesis_mode": row.synthesis_mode,
+        "sections": row.sections or [],
+        "cta": (row.metadata_json or {}).get("cta"),
+        "cited_source_urls": [
+            str(source.get("url"))
+            for source in (row.metadata_json or {}).get("cited_sources", [])
+            if isinstance(source, dict) and source.get("url")
+        ],
+        "created_by_agent": row.created_by_agent,
+        "created_by_user": str(row.created_by_user) if row.created_by_user else None,
+        "brief_id": str(row.brief_id) if row.brief_id else None,
+        "created_at": _iso(row.created_at),
+    }
+
+
+def content_evaluation(row: Any) -> dict[str, Any]:
+    return {
+        "id": str(row.id),
+        "content_version_id": str(row.content_version_id) if row.content_version_id else None,
+        "evaluation_type": row.evaluation_type,
+        "overall_score": row.overall_score,
+        "passed": row.passed,
+        "criteria": row.criteria,
+        "blocking_failures": row.blocking_failures,
+        "warnings": row.warnings,
+        "requires_human_review": row.requires_human_review,
+        "evaluated_by_agent": row.evaluated_by_agent,
+        "created_at": _iso(row.created_at),
+    }
+
+
+def content_repair(row: Any) -> dict[str, Any]:
+    return {
+        "id": str(row.id),
+        "issue": row.issue,
+        "repair_type": row.repair_type,
+        "detail": row.detail,
+        "applied": row.applied,
+        "performed_by_agent": row.performed_by_agent,
+    }
+
+
+def content_representation(row: Any) -> dict[str, Any]:
+    return {
+        "id": str(row.id),
+        "platform": row.platform,
+        "audience": row.audience,
+        "objective": row.objective,
+        "format": row.format,
+        "tone": row.tone,
+        "cta": row.cta,
+        "body": row.body,
+        "canonical_source_url": row.canonical_source_url,
+        "status": row.status,
+    }
+
+
+def content_source(row: Any) -> dict[str, Any]:
+    return {
+        "id": str(row.id),
+        "url": row.url,
+        "title": row.title,
+        "publisher": row.publisher,
+        "tier": row.tier,
+        "reliability": row.reliability,
+        "supports_claim": row.supports_claim,
+        "verified": row.verified,
+        "published_at": _iso(row.published_at),
+        "retrieved_at": _iso(row.retrieved_at),
+    }

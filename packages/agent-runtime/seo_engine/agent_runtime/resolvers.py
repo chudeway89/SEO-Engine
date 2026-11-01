@@ -133,6 +133,13 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {
     "crawler": ToolSpec("crawler", "Fetch and parse pages from a website", "crawl.run"),
     "browser": ToolSpec("browser", "Render JavaScript-dependent pages", "crawl.run"),
     "search": ToolSpec("search", "Search the web for research and SERP data", "research.run"),
+    "serp": ToolSpec(
+        "serp",
+        "Observed search results pages (organic, paid, features, questions)",
+        "research.run",
+        requires_integration="serp_api",
+    ),
+    "policy": ToolSpec("policy", "Evaluate a proposed action against tenant policy", "policy.read"),
     "gsc": ToolSpec(
         "gsc",
         "Google Search Console performance, inspection and sitemaps",

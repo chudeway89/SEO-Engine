@@ -1,0 +1,37 @@
+id: BRD-002
+name: Brand Profile Agent
+version: 1.0.0
+
+description: >
+  Compares the customer's brand profile with what the crawled website actually
+  says. Reports declared services and locations the site does not cover, service
+  and location pages the profile does not mention, and the vocabulary the site
+  leads with. Every difference is a proposal for the customer to confirm; the
+  brand graph is never changed by this agent.
+
+module: agent.py
+
+capabilities:
+  - brand.profile.review
+
+tools:
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: BrandProfileInput
+output_schema: BrandProfileOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  deterministic_fallback: true
+
+prompt: agents/brand/brand-profile
+tags:
+  - brand

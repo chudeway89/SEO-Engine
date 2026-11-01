@@ -1,0 +1,38 @@
+id: SEO-004
+name: Search Intent Agent
+version: 1.0.0
+
+description: >
+  Compares the intent of each mapped query with the type of page that answers
+  it. A transactional query answered by a blog post, or a question answered by a
+  sales page, is reported as a mismatch with the page type that would serve it.
+  Observed SERP features refine the lexical intent when SERP data exists.
+
+module: agent.py
+
+capabilities:
+  - seo.search.intent
+
+tools:
+  - serp
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: SearchIntentInput
+output_schema: SearchIntentOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  deterministic_fallback: true
+
+prompt: agents/seo/search-intent
+tags:
+  - seo
+  - intent

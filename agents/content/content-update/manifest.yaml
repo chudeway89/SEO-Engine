@@ -1,0 +1,38 @@
+id: CNT-006
+name: Content Update Agent
+version: 1.0.0
+
+description: >
+  For each topic the content gap stage decided to UPDATE, diffs the live page
+  against what a brief for that topic requires and produces an update plan: the
+  sections to add or rewrite, the questions it leaves unanswered, the claims it
+  makes without support, the internal links and metadata to change. A live-page
+  change is proposed as a recommendation that needs approval.
+
+module: agent.py
+
+capabilities:
+  - content.edit.update
+
+tools:
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: medium
+
+input_schema: ContentUpdateInput
+output_schema: ContentUpdateOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  deterministic_fallback: true
+
+prompt: agents/content/content-update
+tags:
+  - content
+  - update

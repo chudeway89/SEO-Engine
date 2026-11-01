@@ -1,0 +1,39 @@
+id: CNT-009
+name: Content Quality Guardian Agent
+version: 1.0.0
+
+description: >
+  The gate between a draft and a human approver. Blocks a draft that failed or
+  skipped evaluation, is an outline rather than prose, duplicates another asset
+  or a live page, is thin against its brief, or repeats a template as scaled
+  near-identical content. A draft that passes moves to review; it can never
+  approve or publish anything itself.
+
+module: agent.py
+
+capabilities:
+  - content.evaluate.gate
+
+tools:
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: medium
+
+input_schema: QualityGateInput
+output_schema: QualityGateOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  deterministic_fallback: true
+
+prompt: agents/content/content-quality-gate
+tags:
+  - content
+  - quality
+  - guardian

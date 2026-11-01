@@ -268,3 +268,168 @@ export interface AgentSummary {
   approval_required_for: string[];
   tags: string[];
 }
+
+// --- content -----------------------------------------------------------------
+export interface ContentAsset {
+  id: string;
+  brand_id: string;
+  title: string;
+  asset_type: string;
+  slug: string | null;
+  url: string | null;
+  status: string;
+  risk_category: string;
+  current_version: number;
+  primary_keyword: string | null;
+  external_ref: Record<string, unknown>;
+  is_synthetic: boolean;
+  published_at: string | null;
+  created_at: string | null;
+}
+
+export interface ContentSectionBody {
+  heading: string;
+  body: string;
+}
+
+export interface ContentVersion {
+  id: string;
+  version: number;
+  title: string;
+  meta_description: string;
+  body_markdown: string;
+  word_count: number;
+  change_summary: string;
+  /** "llm", "deterministic" (an outline assembled from the brief) or "human". */
+  synthesis_mode: string;
+  sections: ContentSectionBody[];
+  cta: string | null;
+  cited_source_urls: string[];
+  created_by_agent: string | null;
+  created_by_user: string | null;
+  brief_id: string | null;
+  created_at: string | null;
+}
+
+export interface EvaluationCriterion {
+  criterion: string;
+  score: number;
+  passed: boolean;
+  detail: string;
+}
+
+export interface ContentEvaluation {
+  id: string;
+  content_version_id: string | null;
+  evaluation_type: string;
+  overall_score: number;
+  passed: boolean;
+  criteria: EvaluationCriterion[];
+  blocking_failures: string[];
+  warnings: string[];
+  requires_human_review: boolean;
+  evaluated_by_agent: string | null;
+  created_at: string | null;
+}
+
+export interface ContentRepair {
+  id: string;
+  issue: string;
+  repair_type: string;
+  detail: Record<string, unknown>;
+  applied: boolean;
+  performed_by_agent: string | null;
+}
+
+export interface ContentRepresentation {
+  id: string;
+  platform: string;
+  audience: string | null;
+  objective: string | null;
+  format: string | null;
+  tone: string | null;
+  cta: string | null;
+  body: string;
+  canonical_source_url: string | null;
+  status: string;
+}
+
+export interface ContentDetail {
+  asset: ContentAsset;
+  versions: ContentVersion[];
+  current_version_evaluations: ContentEvaluation[];
+  repairs: ContentRepair[];
+  representations: ContentRepresentation[];
+}
+
+export interface ContentSource {
+  id: string;
+  url: string;
+  title: string;
+  publisher: string | null;
+  tier: string;
+  reliability: number;
+  supports_claim: string | null;
+  verified: boolean;
+  published_at: string | null;
+  retrieved_at: string | null;
+}
+
+export interface AgentRunSummary {
+  agent_id: string;
+  agent_run_id: string;
+  status: string;
+  summary: string;
+  output: Record<string, unknown>;
+  limitations: string[];
+}
+
+export interface ReviewResult {
+  asset: ContentAsset;
+  runs: AgentRunSummary[];
+}
+
+export interface PublishResult {
+  asset: ContentAsset;
+  run: AgentRunSummary;
+}
+
+export interface VersionInput {
+  title: string;
+  meta_description: string;
+  body_markdown: string;
+  sections?: ContentSectionBody[];
+  cta?: string | null;
+  change_summary: string;
+  cited_source_urls?: string[];
+}
+
+// --- strategy preview ----------------------------------------------------------
+export interface StrategyStage {
+  stage: string;
+  agent_id: string;
+  depends_on?: string[];
+  reason: string;
+}
+
+export interface StrategyPreview {
+  agent_run_id: string;
+  summary: string;
+  strategy: {
+    objective?: string;
+    mission_type?: string;
+    target_metric?: string | null;
+    stages?: StrategyStage[];
+    excluded?: StrategyStage[];
+    readiness?: {
+      has_website?: boolean;
+      connected_providers?: string[];
+      competitors_recorded?: number;
+      goals_recorded?: number;
+    };
+    summary?: string;
+  };
+  next_tasks: Record<string, unknown>[];
+  recommendations: Record<string, unknown>[];
+  limitations: string[];
+}
