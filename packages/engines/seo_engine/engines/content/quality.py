@@ -128,7 +128,9 @@ def quality_gate(
         )
 
     # 4. Thin against its own brief.
-    words = len(_WORD.findall(body))
+    # Lowercased first: the pattern is lowercase-only, so capitalised words would
+    # otherwise lose letters and acronyms would not be counted at all.
+    words = len(_WORD.findall(body.lower()))
     result.checks["word_count"] = words
     if (
         not outline

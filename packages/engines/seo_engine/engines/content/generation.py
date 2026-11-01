@@ -390,7 +390,9 @@ def _parse_markdown(
         sections=sections,
         body_markdown=text.strip(),
         word_count=len(text.split()),
-        internal_links=used_links or list(brief.internal_links),
+        # Only links actually in the text count as included; crediting the
+        # brief's links when the model used none would inflate internal linking.
+        internal_links=used_links,
         cited_sources=[s for s in brief.authoritative_sources if s.url in text],
         entities=list(brief.entities),
         schema_recommendation=_schema_for(brief),

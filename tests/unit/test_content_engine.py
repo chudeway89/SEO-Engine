@@ -476,3 +476,35 @@ def test_an_outline_stored_under_an_earlier_notice_wording_is_still_an_outline()
     )
     draft = ContentDraft(title="T", meta_description="", slug="t", body_markdown=earlier)
     assert is_outline(draft)
+
+
+def test_the_gate_counts_capitalised_words_and_acronyms() -> None:
+    from seo_engine.engines.content.quality import quality_gate
+
+    draft = _draft("NIPT DNA UKAS What It Does")
+    gate = quality_gate(draft, _brief(target_word_count=10), evaluation=None)
+    assert gate.checks["word_count"] == 6, "every word counts, whatever its case"
+
+
+async def test_a_model_draft_is_credited_only_with_links_it_actually_contains() -> None:
+    from seo_engine.schemas.content import InternalLinkTarget
+
+    brief = _brief()
+    brief.internal_links = [
+        InternalLinkTarget(url="https://acme.test/services/dna", anchor_text="DNA testing"),
+        InternalLinkTarget(url="https://acme.test/contact", anchor_text="contact"),
+    ]
+    without = await generate_draft(
+        brief,
+        gateway=ModelGateway(_StubProvider("# T\n\n## S\n\nNo links here.\n"), model="any-model"),
+    )
+    assert without.internal_links == [], "links the text does not contain are not credited"
+
+    with_one = await generate_draft(
+        brief,
+        gateway=ModelGateway(
+            _StubProvider("# T\n\n## S\n\nSee https://acme.test/contact to book.\n"),
+            model="any-model",
+        ),
+    )
+    assert [link.url for link in with_one.internal_links] == ["https://acme.test/contact"]
