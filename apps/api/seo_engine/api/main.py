@@ -19,6 +19,7 @@ from seo_engine.api.routers import (
     agents,
     auth,
     brands,
+    content,
     decisions,
     health,
     missions,
@@ -101,6 +102,7 @@ def create_app() -> FastAPI:
         missions.router,
         agents.router,
         decisions.router,
+        content.router,
         platform.router,
     ):
         app.include_router(router, prefix="/api/v1")

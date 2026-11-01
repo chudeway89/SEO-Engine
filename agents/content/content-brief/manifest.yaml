@@ -1,0 +1,41 @@
+id: CNT-003
+name: Content Brief Agent
+version: 1.0.0
+
+description: >
+  Writes the definitive brief for each researched topic: primary and secondary
+  keywords from its cluster, intent, audience, the required sections, the
+  questions to answer, the verified sources to cite, the internal links, the
+  approved claims available and the claims that must never appear. Regulated
+  categories carry additional prohibitions. The brief is what the writer is held
+  to.
+
+module: agent.py
+
+capabilities:
+  - content.write.brief
+
+tools:
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: ContentBriefInput
+output_schema: ContentBriefOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  reasoning: high
+  temperature: 0.1
+  deterministic_fallback: true
+
+prompt: agents/content/content-brief
+tags:
+  - content
+  - brief

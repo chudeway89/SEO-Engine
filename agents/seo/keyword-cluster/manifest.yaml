@@ -1,0 +1,39 @@
+id: SEO-005
+name: Keyword Cluster Agent
+version: 1.0.0
+
+description: >
+  Reads the keyword-to-page mapping as a site structure. Reports topics where
+  several pages compete for the same cluster (cannibalisation) and clusters whose
+  supporting pages never link to their hub, using the observed internal link
+  graph. It proposes consolidation and internal links; it changes nothing.
+
+module: agent.py
+
+capabilities:
+  - seo.keyword.architecture
+
+tools:
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: KeywordClusterInput
+output_schema: KeywordClusterOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  reasoning: medium
+  temperature: 0.1
+  deterministic_fallback: true
+
+prompt: agents/seo/keyword-cluster
+tags:
+  - seo
+  - architecture

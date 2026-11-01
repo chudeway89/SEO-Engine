@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     # --- Third-party SEO data ---------------------------------------------
     ahrefs_api_key: str | None = None
     semrush_api_key: str | None = None
+    # SERP observations (SerpApi-compatible). Without a key the SERP integration
+    # runs its labelled development adapter.
+    serp_api_key: str | None = None
+    serp_api_base_url: str = "https://serpapi.com"
 
     # --- Object storage ----------------------------------------------------
     s3_endpoint: str | None = None

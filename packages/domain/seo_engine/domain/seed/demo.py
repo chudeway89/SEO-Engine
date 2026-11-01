@@ -182,6 +182,10 @@ async def build_demo_brand(
         for provider in (
             IntegrationProvider.GOOGLE_SEARCH_CONSOLE,
             IntegrationProvider.GOOGLE_ANALYTICS_4,
+            # Without SERP_API_KEY this runs the labelled development adapter:
+            # its results pages are synthetic *.example domains, never presented
+            # as observations of a real search engine.
+            IntegrationProvider.SERP_API,
         ):
             connection = await integrations.connect(brand.id, provider)
             connected.append(connection.provider)

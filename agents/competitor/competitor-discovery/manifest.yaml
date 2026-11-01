@@ -1,0 +1,40 @@
+id: CMP-001
+name: Competitor Discovery Agent
+version: 1.0.0
+
+description: >
+  Finds the domains that repeatedly appear in the observed results pages for the
+  brand's own queries, and compares them with the competitors the customer
+  recorded. New candidates are proposals for the customer; recorded competitors
+  that never appear are reported as business, not search, competitors. Domains
+  from synthetic SERP data are reported but never proposed.
+
+module: agent.py
+
+capabilities:
+  - competitor.discover
+
+tools:
+  - serp
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: CompetitorDiscoveryInput
+output_schema: CompetitorDiscoveryOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  reasoning: medium
+  temperature: 0.1
+  deterministic_fallback: true
+
+prompt: agents/competitor/competitor-discovery
+tags:
+  - competitor

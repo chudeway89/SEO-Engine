@@ -162,6 +162,29 @@ class AnalyticsAdapter(ProviderAdapter):
     ) -> ProviderResponse: ...
 
 
+class SERPAdapter(ProviderAdapter):
+    """Search engine result pages.
+
+    One call returns one observed results page for one query, in the provider's
+    raw shape; :func:`seo_engine.integrations.serp.adapters.normalise_serp` turns
+    it into a ``SERPSnapshot``. Nothing here estimates rankings: a page the
+    provider did not return is simply absent.
+    """
+
+    provider = IntegrationProvider.SERP_API
+
+    @abstractmethod
+    async def search(
+        self,
+        *,
+        query: str,
+        country: str | None = None,
+        language: str | None = None,
+        device: str = "desktop",
+        num: int = 10,
+    ) -> ProviderResponse: ...
+
+
 class CMSAdapter(ProviderAdapter):
     """Content management systems.
 

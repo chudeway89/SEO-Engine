@@ -1,0 +1,39 @@
+id: CMP-003
+name: Competitive Gap Agent
+version: 1.0.0
+
+description: >
+  Joins what competitors cover (from competitor analysis) with who is visible
+  for the brand's queries (from SERP research). A topic competitors cover that
+  the brand does not, and where a competitor ranks on page one, scores highest.
+  Gaps resting only on synthetic SERP data are reported but never turned into
+  opportunities.
+
+module: agent.py
+
+capabilities:
+  - competitor.gap
+
+tools:
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: CompetitiveGapInput
+output_schema: CompetitiveGapOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  reasoning: medium
+  temperature: 0.1
+  deterministic_fallback: true
+
+prompt: agents/competitor/competitive-gap
+tags:
+  - competitor

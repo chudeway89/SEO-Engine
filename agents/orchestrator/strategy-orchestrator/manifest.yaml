@@ -1,0 +1,40 @@
+id: ORCH-001
+name: Brand and Strategy Orchestrator
+version: 1.0.0
+
+description: >
+  Turns a business objective into a selected, dependency-ordered plan: it
+  classifies the objective, chooses the stages the mission needs, records why
+  each other stage is not run, and states what the brand would need to connect
+  to unlock them. It delegates through next tasks and never executes a tool or
+  performs another agent's work.
+
+module: agent.py
+
+capabilities:
+  - orchestration.plan
+
+tools:
+  - memory
+
+memory_scopes:
+  - brand
+  - mission
+
+risk_level: low
+
+input_schema: StrategyInput
+output_schema: StrategyOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  reasoning: high
+  temperature: 0.1
+  deterministic_fallback: true
+
+prompt: agents/orchestrator/strategy-orchestrator
+tags:
+  - orchestration

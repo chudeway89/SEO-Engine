@@ -388,6 +388,80 @@ def from_keyword_gaps(
     return opportunities
 
 
+def seed(
+    *,
+    opportunity_type: OpportunityType,
+    title: str,
+    description: str,
+    business_impact: float,
+    seo_impact: float,
+    effort: float,
+    confidence: float,
+    evidence_refs: list[str],
+    target_url: str | None = None,
+    strategic_fit: float = 0.7,
+    risk: RiskLevel = RiskLevel.LOW,
+    source_agent: str = "",
+    data: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """The contract an analysis agent uses to hand an opportunity downstream.
+
+    Analysis agents do not write opportunities themselves; they emit seeds in
+    their stage output and opportunity detection turns them into persisted,
+    prioritised opportunities. A seed without evidence is refused there, so an
+    analysis stage cannot smuggle an unevidenced opportunity into the plan.
+    """
+    return {
+        "opportunity_type": opportunity_type.value,
+        "title": title,
+        "description": description,
+        "business_impact": round(min(max(business_impact, 0.0), 10.0), 2),
+        "seo_impact": round(min(max(seo_impact, 0.0), 10.0), 2),
+        "effort": round(min(max(effort, 1.0), 10.0), 2),
+        "confidence": round(min(max(confidence, 0.0), 1.0), 3),
+        "strategic_fit": round(min(max(strategic_fit, 0.0), 1.0), 3),
+        "risk": risk.value,
+        "target_url": target_url,
+        "evidence_refs": list(evidence_refs),
+        "source_agent": source_agent,
+        "data": data or {},
+    }
+
+
+def from_seeds(seeds: list[dict[str, Any]]) -> tuple[list[DetectedOpportunity], int]:
+    """Convert upstream seeds. Returns (opportunities, number refused for no evidence)."""
+    opportunities: list[DetectedOpportunity] = []
+    refused = 0
+    seen: set[tuple[str, str]] = set()
+    for item in seeds:
+        refs = [str(r) for r in item.get("evidence_refs") or [] if r]
+        if not refs:
+            refused += 1
+            continue
+        signature = (str(item.get("opportunity_type")), str(item.get("title")))
+        if signature in seen:
+            continue
+        seen.add(signature)
+        opportunities.append(
+            DetectedOpportunity(
+                opportunity_type=OpportunityType(item["opportunity_type"]),
+                title=str(item["title"]),
+                description=str(item.get("description") or ""),
+                business_impact=float(item["business_impact"]),
+                seo_impact=float(item["seo_impact"]),
+                effort=float(item["effort"]),
+                confidence=float(item["confidence"]),
+                strategic_fit=float(item.get("strategic_fit", 0.7)),
+                risk=RiskLevel(item.get("risk", RiskLevel.LOW)),
+                target_entity_type="page" if item.get("target_url") else None,
+                target_url=item.get("target_url"),
+                evidence_refs=refs,
+                data={**(item.get("data") or {}), "source_agent": item.get("source_agent")},
+            )
+        )
+    return prioritise_all(opportunities), refused
+
+
 __all__ = [
     "EFFORT_BY_CHECK",
     "PRIORITY_FORMULA",
@@ -397,7 +471,9 @@ __all__ = [
     "from_content_gaps",
     "from_keyword_gaps",
     "from_keyword_positions",
+    "from_seeds",
     "from_technical_issues",
     "prioritise",
     "prioritise_all",
+    "seed",
 ]

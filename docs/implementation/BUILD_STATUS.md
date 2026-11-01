@@ -1,5 +1,9 @@
 # Build Status
 
+> **Superseded.** This is the Sprint 0 status of the earlier skeleton and is kept
+> for history. The current, verified account is
+> [`docs/architecture/build-status.md`](../architecture/build-status.md).
+
 Last updated: 2026-08-27
 
 ## Completed

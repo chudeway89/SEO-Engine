@@ -1,0 +1,41 @@
+id: QUAL-001
+name: Quality Guardian Agent
+version: 1.0.0
+
+description: >
+  Audits everything the platform has recommended for a brand against the
+  evidence store as it now stands: dangling evidence references, recommendations
+  resting entirely on synthetic data, confidence beyond what the evidence
+  supports, high-risk changes without approval, missing expected outcomes and
+  duplicates. It reports and scores; it does not rewrite another agent's work.
+
+module: agent.py
+
+capabilities:
+  - recommendation.audit
+
+tools:
+  - memory
+
+memory_scopes:
+  - brand
+  - mission
+
+risk_level: low
+
+input_schema: QualityAuditInput
+output_schema: QualityAuditOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  reasoning: medium
+  temperature: 0.0
+  deterministic_fallback: true
+
+prompt: agents/guardians/quality-guardian
+tags:
+  - guardian
+  - quality

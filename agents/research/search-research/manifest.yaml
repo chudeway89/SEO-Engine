@@ -1,0 +1,41 @@
+id: RES-001
+name: Search Research Agent
+version: 1.0.0
+
+description: >
+  Summarises the search demand the site is measured to appear for: how much is
+  branded, how it divides by intent and topic, how much is asked as a question,
+  and how much sits just off page one. Built only from Search Console rows, with
+  their provenance; demand the site is invisible to is stated as a limitation,
+  never estimated.
+
+module: agent.py
+
+capabilities:
+  - research.search.demand
+
+tools:
+  - gsc
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: SearchResearchInput
+output_schema: SearchResearchOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  reasoning: medium
+  temperature: 0.1
+  deterministic_fallback: true
+
+prompt: agents/research/search-research
+tags:
+  - research
+  - demand

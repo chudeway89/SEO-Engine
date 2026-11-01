@@ -20,6 +20,7 @@ from datetime import datetime
 from typing import Any
 
 from seo_engine.shared.config import get_settings
+from seo_engine.shared.ids import utcnow
 from sqlalchemy import DateTime, MetaData, String, event, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -60,8 +61,13 @@ class UUIDPrimaryKeyMixin:
 
 
 class TimestampMixin:
+    # Stamped per row by the application. PostgreSQL's now() is the transaction
+    # start time, so with only the server default every row written in one
+    # transaction (a whole mission run, for instance) would share a timestamp and
+    # any timeline ordered by created_at would come back in arbitrary order. The
+    # server default stays for rows inserted outside the ORM.
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

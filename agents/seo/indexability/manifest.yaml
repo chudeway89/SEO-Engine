@@ -1,0 +1,41 @@
+id: SEO-012
+name: Indexability Agent
+version: 1.0.0
+
+description: >
+  Reconciles what the sitemap declares, what the crawl observed and what the
+  business says matters. Reports sitemap URLs that cannot be indexed, indexable
+  pages the sitemap omits, priority landing pages that cannot be indexed, broken
+  canonical targets and — when Search Console is connected — URLs that earn
+  impressions but are no longer indexable.
+
+module: agent.py
+
+capabilities:
+  - seo.audit.indexability
+
+tools:
+  - gsc
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: IndexabilityInput
+output_schema: IndexabilityOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  reasoning: medium
+  temperature: 0.1
+  deterministic_fallback: true
+
+prompt: agents/seo/indexability
+tags:
+  - seo
+  - technical

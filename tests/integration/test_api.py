@@ -191,7 +191,7 @@ async def test_agents_are_listed_with_their_contract(client: httpx.AsyncClient) 
     response = await client.get("/api/v1/agents", headers=_auth(token))
     assert response.status_code == 200
     agents = response.json()["data"]
-    assert len(agents) >= 11
+    assert len(agents) == 36, "every MVP agent is registered"
     for agent in agents:
         assert agent["capabilities"], f"{agent['id']} must declare capabilities"
         assert "risk_level" in agent
@@ -202,3 +202,75 @@ async def test_openapi_documents_the_contract(client: httpx.AsyncClient) -> None
     assert spec["info"]["title"] == "SEO Engine API"
     assert "/api/v1/brands" in spec["paths"]
     assert "/api/v1/missions/{mission_id}" in spec["paths"]
+    assert "/api/v1/content/{asset_id}/approve" in spec["paths"]
+    assert "/api/v1/brands/{brand_id}/strategy" in spec["paths"]
+
+
+# --- strategy and content -----------------------------------------------------
+async def _brand(client: httpx.AsyncClient, headers: dict[str, str]) -> str:
+    response = await client.post("/api/v1/brands", headers=headers, json={"name": "Acme"})
+    return response.json()["data"]["id"]
+
+
+async def test_the_strategy_preview_runs_the_orchestrator_and_creates_no_mission(
+    client: httpx.AsyncClient,
+) -> None:
+    headers = _auth((await _register(client))["data"]["tokens"]["access_token"])
+    brand_id = await _brand(client, headers)
+
+    response = await client.post(
+        f"/api/v1/brands/{brand_id}/strategy",
+        headers=headers,
+        json={"objective": "Increase qualified organic leads"},
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()["data"]
+    assert data["strategy"]["mission_type"] == "qualified_leads"
+    assert data["next_tasks"], "the plan is delegated as next tasks"
+    assert any(r["type"] == "integration.connect" for r in data["recommendations"])
+
+    missions = await client.get(f"/api/v1/brands/{brand_id}/missions", headers=headers)
+    assert missions.json()["data"] == [], "a preview is not a mission"
+    runs = await client.get(
+        f"/api/v1/agents/runs?brand_id={brand_id}&agent_id=ORCH-001", headers=headers
+    )
+    assert [r["id"] for r in runs.json()["data"]] == [data["agent_run_id"]]
+
+
+async def test_content_cannot_be_approved_before_it_passes_the_gate(
+    client: httpx.AsyncClient,
+) -> None:
+    from seo_engine.domain.services import ContentService
+    from seo_engine.permissions.rbac import Principal
+    from seo_engine.schemas.content import ContentDraft
+    from seo_engine.schemas.enums import Role
+    from seo_engine.shared.db import session_scope
+
+    headers = _auth((await _register(client))["data"]["tokens"]["access_token"])
+    brand_id = await _brand(client, headers)
+    me = (await client.get("/api/v1/auth/me", headers=headers)).json()["data"]
+
+    principal = Principal.build(
+        user_id=uuid.UUID(me["user_id"]),
+        tenant_id=uuid.UUID(me["tenant"]["id"]),
+        email=me["email"],
+        role=Role.OWNER,
+    )
+    async with session_scope() as session:
+        content = ContentService(session, principal)
+        asset = await content.create_asset(uuid.UUID(brand_id), title="Draft", slug="draft")
+        await content.add_version(
+            asset,
+            ContentDraft(title="Draft", meta_description="", slug="draft", body_markdown="Body"),
+            change_summary="v1",
+        )
+        asset_id = str(asset.id)
+
+    listed = await client.get(f"/api/v1/brands/{brand_id}/content", headers=headers)
+    assert [a["id"] for a in listed.json()["data"]] == [asset_id]
+    detail = (await client.get(f"/api/v1/content/{asset_id}", headers=headers)).json()["data"]
+    assert detail["asset"]["status"] == "draft" and len(detail["versions"]) == 1
+
+    refused = await client.post(f"/api/v1/content/{asset_id}/approve", headers=headers, json={})
+    assert refused.status_code == 409
+    assert "quality gate" in refused.json()["error"]["message"]

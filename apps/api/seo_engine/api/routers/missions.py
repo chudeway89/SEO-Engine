@@ -48,10 +48,64 @@ def _plan_payload(plan) -> dict:
                 "included": s.included,
                 "reason": s.reason,
                 "depends_on": s.spec.depends_on,
+                "after": s.spec.after,
             }
             for s in plan.stages
         ],
     }
+
+
+class StrategyPreview(BaseModel):
+    objective: str | None = Field(default=None, max_length=2000)
+    website_id: uuid.UUID | None = None
+
+
+@router.post("/brands/{brand_id}/strategy")
+async def preview_strategy(
+    brand_id: uuid.UUID,
+    body: StrategyPreview,
+    session: SessionDep,
+    principal: PrincipalDep,
+    request: Request,
+) -> dict:
+    """Preview the plan for an objective through the strategy orchestrator (ORCH-001).
+
+    Runs the agent through the Agent Runtime — so the preview is an audited run
+    with its own evidence — and creates no mission and no task.
+    """
+    from seo_engine.agent_runtime.runner import AgentRunner, RunRequest
+    from seo_engine.domain.services.integration import IntegrationService
+    from seo_engine.workflows.services import build_services
+
+    connected = await IntegrationService(session, principal).connected_providers(brand_id)
+    inputs: dict = {"brand_id": str(brand_id)}
+    if body.objective:
+        inputs["objective"] = body.objective
+    if body.website_id:
+        inputs["website_id"] = str(body.website_id)
+    outcome = await AgentRunner(session).run(
+        RunRequest(
+            agent_id="ORCH-001",
+            objective="Preview the mission plan for an objective",
+            principal=principal,
+            brand_id=brand_id,
+            inputs=inputs,
+            services=build_services(session, principal),
+            available_integrations=connected,
+        )
+    )
+    result = outcome.result
+    return envelope(
+        {
+            "agent_run_id": str(outcome.run.id),
+            "summary": result.summary,
+            "strategy": result.outputs.get("strategy", {}),
+            "next_tasks": [t.model_dump(mode="json") for t in result.next_tasks],
+            "recommendations": [r.model_dump(mode="json") for r in result.recommendations],
+            "limitations": result.limitations,
+        },
+        request_id=request.state.request_id,
+    )
 
 
 @router.post("/brands/{brand_id}/missions", status_code=201)

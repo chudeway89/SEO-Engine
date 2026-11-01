@@ -1,0 +1,43 @@
+id: CNT-004
+name: Content Writer Agent
+version: 1.0.0
+
+description: >
+  Produces the first version of each briefed piece as an internal draft. With a
+  language model configured it writes prose inside the brief's constraints; with
+  none it produces a structured outline, labelled as such, and never invents
+  article text. Every draft is a new immutable version, and nothing it writes
+  is visible on the live site.
+
+module: agent.py
+
+capabilities:
+  - content.write.draft
+
+tools:
+  - llm
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: medium
+
+input_schema: ContentWriterInput
+output_schema: ContentWriterOutput
+
+# Creating an internal draft record changes nothing a visitor can see.
+autonomous_actions:
+  - content.create
+
+approval_required_for: []
+
+model_policy:
+  reasoning: high
+  temperature: 0.4
+  deterministic_fallback: true
+
+prompt: agents/content/content-writer
+tags:
+  - content
+  - writing

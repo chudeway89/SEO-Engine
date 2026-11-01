@@ -109,7 +109,19 @@ async def test_the_mission_runs_end_to_end(session: AsyncSession, tenant_ctx, we
     _, mission, plan, report = await _run_mission(session, principal, web_services)
 
     assert report.failed_stages == [], f"stages failed: {report.failed_stages}"
-    assert report.completed_stages == [s.spec.stage for s in plan.included]
+    planned = [s.spec.stage for s in plan.included]
+    assert sorted(report.completed_stages) == sorted(planned)
+
+    # Stages run in dependency-ready batches, so the order is a topological order
+    # of the plan rather than its list order: every stage ran after each of its
+    # hard and ordering dependencies that the plan included.
+    position = {stage: i for i, stage in enumerate(report.completed_stages)}
+    for planned_stage in plan.included:
+        for dep in [*planned_stage.spec.depends_on, *planned_stage.spec.after]:
+            if dep in position:
+                assert position[dep] < position[planned_stage.spec.stage], (
+                    f"{planned_stage.spec.stage} ran before its dependency {dep}"
+                )
 
     # Every stage produced a human-readable observation, and no stage returned
     # an empty summary.
@@ -200,7 +212,11 @@ async def test_health_content_requires_human_approval(
 ) -> None:
     """The demo brand is health-category: nothing publishes itself."""
     _, _, principal = tenant_ctx
-    scenario, _, _, _ = await _run_mission(session, principal, web_services)
+    # The decision gate recommends the top N opportunities by priority. On-page
+    # and indexability fixes legitimately outrank content work on the demo site,
+    # so the cap is raised here until content opportunities are reached too —
+    # this test is about how content recommendations are gated, not about rank.
+    scenario, _, _, _ = await _run_mission(session, principal, web_services, max_recommendations=40)
 
     decisions = DecisionService(session, principal)
     recommendations = await decisions.list_recommendations(scenario.brand.id)

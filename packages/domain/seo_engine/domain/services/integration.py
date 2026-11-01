@@ -34,9 +34,11 @@ from seo_engine.domain.repositories import repository_for
 from seo_engine.events.bus import emit
 from seo_engine.integrations.base import (
     AnalyticsAdapter,
+    CMSAdapter,
     ProviderAdapter,
     ProviderResponse,
     SearchConsoleAdapter,
+    SERPAdapter,
 )
 from seo_engine.integrations.cms.adapters import DevelopmentCMSAdapter, WordPressAdapter
 from seo_engine.integrations.google.analytics import (
@@ -49,12 +51,19 @@ from seo_engine.integrations.google.search_console import (
     DevelopmentSearchConsoleAdapter,
     GoogleSearchConsoleAdapter,
 )
+from seo_engine.integrations.serp.adapters import (
+    DevelopmentSERPAdapter,
+    NormalisedSERP,
+    SerpApiAdapter,
+    normalise_serp,
+)
 from seo_engine.observability.audit import record_audit
 from seo_engine.observability.logging import get_logger
 from seo_engine.permissions.rbac import (
     P_ANALYTICS_READ,
     P_INTEGRATION_CONNECT,
     P_INTEGRATION_READ,
+    P_RESEARCH_RUN,
     Principal,
 )
 from seo_engine.schemas.enums import (
@@ -132,6 +141,11 @@ class IntegrationService:
             await self._store_credentials(record, tokens)
 
         adapter = await self.adapter_for(record)
+        # The resolved adapter is the truth: tokens without a configured OAuth
+        # app (or a SERP connection without an API key) still run the
+        # development adapter, and the connection must say so.
+        mode = adapter.mode
+        record.mode = mode.value
         health = await adapter.health_check()
         record.status = health.status.value
         record.last_health_check_at = utcnow()
@@ -267,6 +281,11 @@ class IntegrationService:
                     )
             return DevelopmentCMSAdapter()
 
+        if provider is IntegrationProvider.SERP_API:
+            if settings.serp_api_key:
+                return SerpApiAdapter(settings.serp_api_key, base_url=settings.serp_api_base_url)
+            return DevelopmentSERPAdapter()
+
         if provider is IntegrationProvider.GENERIC_CMS:
             return DevelopmentCMSAdapter(
                 site_url=(connection.settings or {}).get(
@@ -295,6 +314,28 @@ class IntegrationService:
                 {"provider": IntegrationProvider(provider).value},
             )
         return connection, await self.adapter_for(connection)
+
+    async def cms_adapter(self, brand_id: uuid.UUID) -> tuple[IntegrationConnection, CMSAdapter]:
+        """The adapter for the brand's connected CMS (WordPress first, then generic).
+
+        Raises ``IntegrationNotConnectedError`` when no CMS is connected: publishing
+        never falls back to an adapter the customer did not connect.
+        """
+        for provider in (IntegrationProvider.WORDPRESS, IntegrationProvider.GENERIC_CMS):
+            connection = await self.get_connection(brand_id, provider)
+            if connection is not None and connection.status == IntegrationStatus.CONNECTED:
+                adapter = await self.adapter_for(connection)
+                assert isinstance(adapter, CMSAdapter)  # provider dictates the adapter type
+                return connection, adapter
+        raise IntegrationNotConnectedError(
+            "no content management system is connected for this brand",
+            {
+                "providers": [
+                    IntegrationProvider.WORDPRESS.value,
+                    IntegrationProvider.GENERIC_CMS.value,
+                ]
+            },
+        )
 
     # -- raw storage -------------------------------------------------------
     async def store_raw(
@@ -493,6 +534,58 @@ class IntegrationService:
         ]
 
     # -- GA4 sync ----------------------------------------------------------
+    async def query_demand(self, brand_id: uuid.UUID, *, limit: int = 500) -> list[dict[str, Any]]:
+        """Observed per-query demand with the provenance of the rows behind it.
+
+        A query whose rows are synthetic is reported as synthetic even if one
+        row were observed: the weakest provenance wins, so a mixed figure is
+        never presented as a clean measurement.
+        """
+        from sqlalchemy import func, select
+
+        self.principal.require(P_ANALYTICS_READ)
+        repo = repository_for(GSCPerformance)(self.session, self.principal.tenant_id)
+        statement = (
+            select(
+                GSCPerformance.query,
+                func.sum(GSCPerformance.impressions),
+                func.sum(GSCPerformance.clicks),
+                func.avg(GSCPerformance.position),
+                func.array_agg(func.distinct(GSCPerformance.provenance)),
+                func.array_agg(func.distinct(GSCPerformance.page)),
+            )
+            .where(
+                GSCPerformance.tenant_id == self.principal.tenant_id,
+                GSCPerformance.brand_id == brand_id,
+                GSCPerformance.query.is_not(None),
+            )
+            .group_by(GSCPerformance.query)
+            .order_by(func.sum(GSCPerformance.impressions).desc())
+            .limit(limit)
+        )
+        rows = await self.session.execute(statement)
+        _ = repo  # repository construction pins the session to this tenant
+        demand: list[dict[str, Any]] = []
+        for query, impressions, clicks, position, provenances, pages in rows.all():
+            values = {p for p in (provenances or []) if p}
+            if DataProvenance.SYNTHETIC_DEMO.value in values:
+                provenance = DataProvenance.SYNTHETIC_DEMO.value
+            elif values == {DataProvenance.OBSERVED.value}:
+                provenance = DataProvenance.OBSERVED.value
+            else:
+                provenance = DataProvenance.UNKNOWN.value
+            demand.append(
+                {
+                    "query": query,
+                    "impressions": int(impressions or 0),
+                    "clicks": int(clicks or 0),
+                    "position": round(float(position or 0.0), 2),
+                    "provenance": provenance,
+                    "pages": sorted(p for p in (pages or []) if p)[:5],
+                }
+            )
+        return demand
+
     async def sync_analytics(self, brand_id: uuid.UUID, *, days: int = 28) -> dict[str, Any]:
         self.principal.require(P_ANALYTICS_READ)
         connection, adapter = await self.require_adapter(
@@ -655,6 +748,24 @@ class IntegrationService:
             "window": {"start": start.isoformat(), "end": end.isoformat()},
         }
 
+    async def lead_event_names(self, brand_id: uuid.UUID) -> list[str]:
+        """Synced GA4 events flagged as qualified-lead events for this brand."""
+        from sqlalchemy import select
+
+        self.principal.require(P_ANALYTICS_READ)
+        repo = repository_for(GA4Conversion)(self.session, self.principal.tenant_id)
+        rows = await self.session.execute(
+            select(GA4Conversion.event_name)
+            .where(
+                GA4Conversion.tenant_id == self.principal.tenant_id,
+                GA4Conversion.brand_id == brand_id,
+                GA4Conversion.is_qualified_lead_event.is_(True),
+            )
+            .distinct()
+        )
+        _ = repo  # repository construction pins the session to this tenant
+        return sorted(name for (name,) in rows.all())
+
     async def organic_conversion_baseline(
         self, brand_id: uuid.UUID
     ) -> tuple[float | None, DataProvenance, str]:
@@ -684,6 +795,58 @@ class IntegrationService:
             DataProvenance(row[1]) if row[1] else DataProvenance.UNKNOWN,
             "google_analytics_4",
         )
+
+    # -- SERP observations -------------------------------------------------
+    async def serp_lookup(
+        self,
+        brand_id: uuid.UUID,
+        query: str,
+        *,
+        country: str | None = None,
+        language: str | None = None,
+        device: str = "desktop",
+        num: int = 10,
+        brand_domain: str | None = None,
+    ) -> NormalisedSERP:
+        """Fetch one results page, keep the raw response, persist the snapshot.
+
+        A development-adapter page is persisted with ``provenance=synthetic_demo``
+        like every other development row, so a SERP-derived finding can always
+        be traced back to whether a real page was ever observed.
+        """
+        self.principal.require(P_RESEARCH_RUN)
+        connection, adapter = await self.require_adapter(brand_id, IntegrationProvider.SERP_API)
+        assert isinstance(adapter, SERPAdapter)  # provider dictates the adapter type
+
+        response = await adapter.search(
+            query=query, country=country, language=language, device=device, num=num
+        )
+        raw = await self.store_raw(connection, response)
+        provider_name = (
+            "serpapi" if response.mode is IntegrationMode.PRODUCTION else "serp_development_adapter"
+        )
+        normalised = normalise_serp(
+            response.payload,
+            query=query,
+            provider=provider_name,
+            mode=response.mode,
+            country=country,
+            device=device,
+        )
+
+        from seo_engine.domain.services.search import SearchService
+
+        await SearchService(self.session, self.principal).store_snapshot(
+            brand_id,
+            normalised.snapshot,
+            brand_domain=brand_domain,
+            raw_reference={
+                "raw_response_id": str(raw.id),
+                "mode": response.mode.value,
+                "synthetic": response.is_synthetic,
+            },
+        )
+        return normalised
 
 
 def _parse_date(value: str) -> date:

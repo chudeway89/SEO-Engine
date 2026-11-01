@@ -7,6 +7,7 @@ Specification rule 4: "no direct database access from agents").
 from __future__ import annotations
 
 from seo_engine.domain.services.brand import BrandService_ as BrandService
+from seo_engine.domain.services.content import ContentService
 from seo_engine.domain.services.decision import DecisionService
 from seo_engine.domain.services.identity import IdentityService, RegistrationResult
 from seo_engine.domain.services.integration import IntegrationService
@@ -16,6 +17,7 @@ from seo_engine.domain.services.website import WebsiteService
 
 __all__ = [
     "BrandService",
+    "ContentService",
     "DecisionService",
     "IdentityService",
     "IntegrationService",
