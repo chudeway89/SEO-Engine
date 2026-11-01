@@ -3,7 +3,7 @@
 import type { ContentVersion } from "./types";
 
 /** The opening of the notice the platform puts on an outline it assembled
- * from a brief when no language model is configured (see
+ * from a brief when no model wrote the piece (see
  * packages/engines/seo_engine/engines/content/generation.py). */
 const OUTLINE_MARKER = "This is a structured outline, not finished prose.";
 

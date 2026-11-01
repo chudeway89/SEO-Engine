@@ -15,10 +15,11 @@ PRIORITISE → RECOMMEND → APPROVE → ACT → MEASURE → LEARN → MEMORY �
 > each stage through the Agent Runtime against a real crawl, measures a baseline,
 > and produces evidence-backed, approval-gated recommendations; a content mission
 > runs research → brief → draft → evaluation → quality gate → policy review →
-> publishing, and nothing publishes without a person. Without a language model
-> the writer leaves an outline and a person writes the piece in the content
+> publishing, and nothing publishes without a person. The platform is
+> model-agnostic and runs fully without a model: connect any model, or none, and
+> without one the writer leaves an outline a person completes in the content
 > screen; approved title and internal-link changes are applied through the
-> connected CMS. 473 tests pass against a real PostgreSQL + pgvector database.
+> connected CMS. 495 tests pass against a real PostgreSQL + pgvector database.
 > See [`docs/architecture/build-status.md`](docs/architecture/build-status.md)
 > for a precise, per-phase account.
 
@@ -43,7 +44,7 @@ PRIORITISE → RECOMMEND → APPROVE → ACT → MEASURE → LEARN → MEMORY �
 | 36 MVP agents with manifest, impl, schemas, prompt, README and behavioural tests | Done | registry + catalogue tests; every agent but the planner runs in a mission graph |
 | Content pipeline with human-only approval and gated publishing | Done | content agent tests: outlines never publish; approval and publish action both required |
 | Human writing path (write → review → approve → publish) + web content screen | Done | an API test drives it end to end; the screen was driven in a real browser |
-| Model gateway: Anthropic and OpenAI providers, deterministic fallback | Done | provider tests against in-process fakes of each API; a hybrid-writer agent test |
+| Model-agnostic, model-optional gateway: any Chat Completions endpoint (hosted or local), the Messages API, or a registered provider; runs fully without a model | Done | protocol tests against in-process fakes; any-model, failing-model and no-model agent tests; per-run usage recorded |
 | Golden evaluation datasets | Done for 5 agents | data-driven cases run through the real runtime (`tests/evaluation/`) |
 
 A metric the platform cannot measure is `null` with honest provenance.

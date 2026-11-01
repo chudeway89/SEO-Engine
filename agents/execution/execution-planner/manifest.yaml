@@ -43,8 +43,6 @@ approval_required_for:
   - seo.redirect_create
 
 model_policy:
-  reasoning: high
-  temperature: 0.1
   deterministic_fallback: true
 
 prompt: agents/execution/execution-planner

@@ -15,6 +15,7 @@ import uuid
 
 import pytest
 from seo_engine.agent_registry.registry import AgentRegistry, find_repo_root, set_registry
+from seo_engine.domain.models.agents import LLMUsage
 from seo_engine.domain.models.decision import Policy
 from seo_engine.domain.repositories import repository_for
 from seo_engine.domain.seed.demo import build_demo_brand
@@ -38,7 +39,7 @@ from seo_engine.schemas.enums import (
     RiskLevel,
     SynthesisMode,
 )
-from seo_engine.shared.llm import ModelGateway
+from seo_engine.shared.llm import ModelGateway, ModelProviderError
 from seo_engine.workflows.mission import MissionWorkflow
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -208,7 +209,8 @@ async def test_with_a_model_the_writer_writes_prose_and_reports_a_hybrid_run(
     provider = ScriptedProvider(
         f"# How much does a DNA test cost?\n\n## What affects the price\n\n{PROSE}"
     )
-    harness.extra["model_gateway"] = ModelGateway(provider=provider)
+    # Any model: the provider and the model name are whatever the operator connected.
+    harness.extra["model_gateway"] = ModelGateway(provider=provider, model="any-connected-model")
     content = ContentService(harness.session, harness.principal)
     brief = await content.save_brief(harness.brand_id, _brief())
 
@@ -216,6 +218,16 @@ async def test_with_a_model_the_writer_writes_prose_and_reports_a_hybrid_run(
 
     result = outcome.result
     assert result.synthesis_mode is SynthesisMode.HYBRID, "a model wrote the prose"
+    # Every model call is recorded against the run that made it, and what the
+    # provider did not report (tokens) or the operator did not price (cost) is
+    # recorded as unknown, never as zero.
+    usage = await repository_for(LLMUsage)(harness.session, harness.principal.tenant_id).list(
+        LLMUsage.agent_run_id == outcome.run.id
+    )
+    assert [(u.provider, u.model, u.succeeded) for u in usage] == [
+        ("scripted_test_double", "any-connected-model", True)
+    ]
+    assert usage[0].agent_id == "CNT-004" and usage[0].estimated_cost_usd is None
     writer = result.outputs["content_writer"]
     assert writer["outlines"] == 0 and writer["drafts"][0]["synthesis_mode"] == "llm"
     assert provider.requests, "the run went through the injected gateway"
@@ -230,6 +242,64 @@ async def test_with_a_model_the_writer_writes_prose_and_reports_a_hybrid_run(
     gate = await harness.run("CNT-009", {"asset_ids": [asset_id]})
     blocking = gate.result.outputs["content_quality_gate"]["results"][0]["blocking"]
     assert not any("outline" in b for b in blocking)
+
+
+async def test_when_the_connected_model_fails_the_writer_still_delivers(
+    harness: AgentHarness,
+) -> None:
+    failing = ScriptedProvider([ModelProviderError("connection refused", retryable=False)])
+    harness.extra["model_gateway"] = ModelGateway(provider=failing, model="any-connected-model")
+    content = ContentService(harness.session, harness.principal)
+    brief = await content.save_brief(harness.brand_id, _brief())
+
+    outcome = await harness.run("CNT-004", {"brief_ids": [str(brief.id)]})
+
+    result = outcome.result
+    assert result.status == "completed", "a model failure never stops the platform"
+    assert result.synthesis_mode is SynthesisMode.DETERMINISTIC
+    assert result.outputs["content_writer"]["outlines"] == 1
+    assert any("connection refused" in lim for lim in result.limitations), "and it says why"
+    usage = await repository_for(LLMUsage)(harness.session, harness.principal.tenant_id).list(
+        LLMUsage.agent_run_id == outcome.run.id
+    )
+    assert [u.succeeded for u in usage] == [False] and "connection refused" in usage[0].error
+
+
+async def test_connecting_a_model_later_upgrades_the_outline_and_never_overwrites_prose(
+    harness: AgentHarness,
+) -> None:
+    content = ContentService(harness.session, harness.principal)
+    brief = await content.save_brief(harness.brand_id, _brief())
+    inputs = {"brief_ids": [str(brief.id)]}
+
+    # No model: an outline.
+    first = await harness.run("CNT-004", inputs)
+    asset_id = first.result.outputs["content_writer"]["drafts"][0]["asset_id"]
+
+    # Still no model: running again adds nothing.
+    again = await harness.run("CNT-004", inputs)
+    assert again.result.outputs["content_writer"]["drafts_written"] == 0
+    assert "outline is unchanged" in again.result.outputs["content_writer"]["skipped"][0]["reason"]
+
+    # A model is connected — any model, and its own wording of the title does
+    # not change which asset it writes into.
+    provider = ScriptedProvider(
+        f"# A different title the model chose\n\n## What affects the price\n\n{PROSE}"
+    )
+    harness.extra["model_gateway"] = ModelGateway(provider=provider, model="any-connected-model")
+    upgraded = await harness.run("CNT-004", inputs)
+    drafts = upgraded.result.outputs["content_writer"]["drafts"]
+    assert [d["asset_id"] for d in drafts] == [asset_id] and drafts[0]["synthesis_mode"] == "llm"
+    asset = await content.get_asset(uuid.UUID(asset_id))
+    assert asset.current_version == 2
+
+    # Prose is never overwritten, and the model is not even asked.
+    calls = len(provider.sent)
+    last = await harness.run("CNT-004", inputs)
+    assert last.result.outputs["content_writer"]["drafts_written"] == 0
+    assert "already written prose" in last.result.outputs["content_writer"]["skipped"][0]["reason"]
+    assert len(provider.sent) == calls
+    assert (await content.get_asset(uuid.UUID(asset_id))).current_version == 2
 
 
 # --- evaluation, optimisation and the gate --------------------------------------

@@ -26,7 +26,7 @@ from seo_engine.api.agent_calls import run_agent, run_summary
 from seo_engine.api.deps import PageDep, PrincipalDep, SessionDep
 from seo_engine.api.envelope import envelope, page_meta
 from seo_engine.domain.services import ContentService
-from seo_engine.engines.content.generation import OUTLINE_NOTICE, sections_from_markdown
+from seo_engine.engines.content.generation import OUTLINE_MARKER, sections_from_markdown
 from seo_engine.schemas.content import ContentDraft, ContentSection
 from seo_engine.schemas.enums import ContentStatus
 from seo_engine.schemas.evidence import SourceReference
@@ -67,7 +67,7 @@ class VersionIn(BaseModel):
     def _not_the_outline_notice(cls, value: str) -> str:
         # A person submitting the generated outline unchanged has not written
         # the piece; recording it as human prose would launder the outline.
-        if OUTLINE_NOTICE in value:
+        if OUTLINE_MARKER in value:
             raise ValueError(
                 "the body still carries the outline notice; replace the outline with "
                 "the written piece"

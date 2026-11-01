@@ -33,8 +33,6 @@ autonomous_actions:
 approval_required_for: []
 
 model_policy:
-  reasoning: high
-  temperature: 0.4
   deterministic_fallback: true
 
 prompt: agents/content/content-writer

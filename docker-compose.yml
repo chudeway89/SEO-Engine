@@ -20,8 +20,17 @@ x-app-env: &app-env
   TEMPORAL_TASK_QUEUE: seo-engine
   WORKFLOW_ENGINE: ${WORKFLOW_ENGINE:-local}
   JWT_SECRET: ${JWT_SECRET:-development-secret-do-not-use-in-production}
+  # Optional and model-agnostic: deterministic (no model), openai_compatible
+  # (any Chat Completions endpoint, hosted or local) or anthropic. LLM_MODEL
+  # names the model you connected; there is no default. A model on the host
+  # machine is reachable from the containers at host.docker.internal.
   LLM_PROVIDER: ${LLM_PROVIDER:-deterministic}
+  LLM_MODEL: ${LLM_MODEL:-}
+  LLM_BASE_URL: ${LLM_BASE_URL:-}
   LLM_API_KEY: ${LLM_API_KEY:-}
+  LLM_TEMPERATURE: ${LLM_TEMPERATURE:-}
+  LLM_INPUT_PRICE_PER_MTOK: ${LLM_INPUT_PRICE_PER_MTOK:-}
+  LLM_OUTPUT_PRICE_PER_MTOK: ${LLM_OUTPUT_PRICE_PER_MTOK:-}
   GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
   GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
   CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:-}

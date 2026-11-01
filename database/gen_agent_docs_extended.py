@@ -735,10 +735,13 @@ AGENTS_DATA: list[dict[str, Any]] = [
             "proposes and a person approves."
         ),
         purpose=(
-            "Writes the first version of each open brief as an internal draft. With a model configured, "
-            "`generate_draft` writes prose within the brief's constraints and the run reports itself hybrid; "
-            "with none, the gateway refuses to improvise and the draft is a structured outline carrying a "
-            "notice that it is not prose. Each draft is an immutable version created through the content service."
+            "Writes each open brief as an internal draft. It works with any connected model and with none: "
+            "with a model, `generate_draft` writes prose within the brief's constraints and the run reports "
+            "itself hybrid; with none — or if the connected model fails — the draft is a structured outline "
+            "carrying a notice that it is not prose, and the run says why. The asset's identity comes from the "
+            "brief, not the model's wording, so a model connected later upgrades an outline in place. It never "
+            "overwrites written prose and never touches a published page. Each draft is an immutable version "
+            "created through the content service."
         ),
         inputs=[
             ("brand_id / website_id", "UUID", "The brand and its site."),
@@ -753,9 +756,24 @@ AGENTS_DATA: list[dict[str, Any]] = [
                 "Outlines only, stated as a limitation; a person writes the piece over the outline "
                 "(`POST /content/{id}/versions` or the content screen) and asks for review.",
             ),
+            (
+                "Connected model fails, is misconfigured or returns nothing usable",
+                "The outline is produced instead and the limitation gives the reason; the failed "
+                "call is recorded in `llm_usage`.",
+            ),
+            (
+                "Model output cut off at the output limit",
+                "The draft is kept and flagged as possibly incomplete.",
+            ),
+            (
+                "The brief's asset already holds prose, or is published",
+                "Left untouched and reported in `skipped`; live pages change through CNT-006.",
+            ),
         ],
         evals=[
-            "never generates prose without a model;",
+            "never generates prose without a model, and completes without one;",
+            "works with any connected model, and degrades to the outline when it fails;",
+            "never overwrites written prose or a published page;",
             "declares content.create and requires no approval for it;",
             "reports hybrid synthesis only when a model wrote.",
         ],

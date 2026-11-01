@@ -64,6 +64,10 @@ async def test_health_is_enveloped_and_needs_no_auth(client: httpx.AsyncClient) 
 async def test_readiness_reports_the_database(client: httpx.AsyncClient) -> None:
     body = (await client.get("/readyz")).json()
     assert body["data"]["checks"]["database"] == "ok"
+    # A model is reported, never required: with none connected the platform is
+    # ready and says it runs deterministically.
+    assert body["data"]["status"] == "ready"
+    assert body["data"]["language_model"]["mode"] == "deterministic"
 
 
 async def test_every_response_carries_security_headers(client: httpx.AsyncClient) -> None:

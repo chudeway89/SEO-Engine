@@ -18,7 +18,7 @@ and produces evidence-backed, approval-gated recommendations. This is covered by
 runtime, crawler, engines and database with nothing mocked but the network.
 
 All **36 MVP agents** named by the build prompt are implemented and wired into
-mission graphs. **473 tests pass** (unit, integration, security, agent,
+mission graphs. **495 tests pass** (unit, integration, security, agent,
 workflow, migration and golden evaluation), `ruff` is clean, `mypy` reports no
 issues across 130 source files, and the API, worker, Docker stack, seed and
 operator CLI exist. The Next.js web application builds, and its content screen
@@ -53,7 +53,7 @@ it appears.
 | 19 | Workflows | **Done** — the mission workflow, the local engine, and the Temporal engine + worker |
 | 20 | Web application | **Done** — a Next.js app: brands, integrations, the strategy preview, missions, recommendations, and the content screen (write, review, approve, publish) |
 | 21 | End-to-end mission | **Done** — the canonical mission runs and is asserted end to end |
-| 22 | Test suites | **Done** — unit, integration, security, agent, workflow, migration and golden evaluation (473 tests) |
+| 22 | Test suites | **Done** — unit, integration, security, agent, workflow, migration and golden evaluation (495 tests) |
 | 23 | Security hardening | **Done** — isolation, injection boundary, no-fabrication, chain-of-thought and approval all enforced and tested |
 | 24 | Documentation and QA gate | **Done** — the docs, `docs/api`, per-agent docs, and `make gate` (lint + typecheck + full suite, all green) |
 
@@ -91,12 +91,15 @@ still runs, and says so, when SERP is not connected.
   (`*.example`) are never proposed as competitors and a gap resting only on
   synthetic SERP data never becomes an opportunity. The production adapters are
   implemented and tested against in-process fakes.
-- **No live model call was made in this build.** The Anthropic and OpenAI
-  providers are tested against in-process fakes of each API (request shape,
-  channel separation, usage and errors), and the hybrid writer path is tested
-  with a scripted provider. Without `LLM_API_KEY` the writer produces outlines,
-  never invented prose; a person writes the piece over the outline (the content
-  screen, or `POST /content/{id}/versions`) and the agents review that version.
+- **No live model call was made in this build**, because no model is connected
+  here. The platform is model-agnostic: the Chat Completions and Messages
+  protocol providers are tested against in-process fakes of each API (request
+  shape, channel separation, keyless endpoints, parameter adaptation, retries,
+  usage and errors), and the writer is tested against a scripted stand-in for
+  any model, including one that fails, wraps its answer, emits inline reasoning
+  or is cut off. Without a model every agent and mission still runs; the writer
+  produces outlines, never invented prose, and a person writes the piece over
+  the outline (the content screen, or `POST /content/{id}/versions`).
 - **Live-page executors are deliberately narrow.** An approved page-title change
   and an approved internal link are applied through WordPress's REST API or the
   development CMS. Meta descriptions, structured data and redirects live in

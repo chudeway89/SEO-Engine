@@ -35,8 +35,6 @@ approval_required_for:
   - cms.publish
 
 model_policy:
-  reasoning: medium
-  temperature: 0.0
   deterministic_fallback: true
 
 prompt: agents/execution/publishing

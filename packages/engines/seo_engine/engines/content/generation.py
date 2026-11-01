@@ -33,17 +33,24 @@ from seo_engine.schemas.enums import SynthesisMode
 from seo_engine.shared.llm import (
     DeterministicFallbackRequired,
     LLMMessage,
+    LLMResponse,
     ModelGateway,
+    ModelProviderError,
     get_gateway,
 )
 
 log = get_logger(__name__)
 
+#: The stable opening of every outline notice. Outlines are recognised by this
+#: sentence alone, so an outline stored under an earlier wording of the rest of
+#: the notice is still recognised. Never change it.
+OUTLINE_MARKER = "This is a structured outline, not finished prose."
+
 OUTLINE_NOTICE = (
-    "This is a structured outline, not finished prose. No language model is "
-    "configured, and SEO Engine will not generate article text it cannot ground in "
+    f"{OUTLINE_MARKER} No language model wrote "
+    "this piece, and SEO Engine will not generate article text it cannot ground in "
     "the brief. Every heading, question, claim and link below comes from the brief; "
-    "a writer (or a configured model) supplies the prose."
+    "a writer (or a connected model) supplies the prose."
 )
 
 
@@ -58,25 +65,49 @@ async def generate_draft(
     gateway: ModelGateway | None = None,
     reference_pages: list[CrawlPage] | None = None,
     brand_voice: dict[str, Any] | None = None,
+    notes: list[str] | None = None,
 ) -> ContentDraft:
-    """Produce a draft from a brief, by model where possible."""
+    """Produce a draft from a brief, by model where possible.
+
+    Works with any connected model and with none. If no model is configured,
+    or the configured one fails or returns nothing usable, the result is the
+    deterministic outline, and the reason is appended to ``notes`` for the
+    caller to report. A model's draft that was cut off at the output limit is
+    kept (a person or the next pass can finish it) and noted as such.
+    """
     gateway = gateway or get_gateway()
     try:
-        return await _generate_with_model(
+        response = await _complete_with_model(
             brief, gateway=gateway, reference_pages=reference_pages, brand_voice=brand_voice
         )
     except DeterministicFallbackRequired:
         log.info("content_generation_deterministic", topic=brief.primary_topic)
         return build_outline(brief)
+    except ModelProviderError as exc:
+        log.warning("content_generation_model_failed", topic=brief.primary_topic, error=exc.message)
+        if notes is not None:
+            notes.append(
+                f"The configured model could not write '{brief.title}' ({exc.message}); "
+                "a structured outline was produced instead."
+            )
+        return build_outline(brief)
+
+    draft = _parse_markdown(response.text, brief, synthesis_mode=SynthesisMode.LLM)
+    if response.truncated and notes is not None:
+        notes.append(
+            f"The model's draft of '{brief.title}' stopped at the output limit "
+            f"(LLM_MAX_OUTPUT_TOKENS) and may be incomplete."
+        )
+    return draft
 
 
-async def _generate_with_model(
+async def _complete_with_model(
     brief: ContentBrief,
     *,
     gateway: ModelGateway,
     reference_pages: list[CrawlPage] | None,
     brand_voice: dict[str, Any] | None,
-) -> ContentDraft:
+) -> LLMResponse:
     from seo_engine.shared.untrusted import wrap_external
 
     messages = [
@@ -108,13 +139,13 @@ async def _generate_with_model(
             LLMMessage(role="user", channel="external_content", content=untrusted.render())
         )
 
-    response = await gateway.complete(
+    # No sampling parameters are chosen here: they are a property of the model
+    # the operator connected (LLM_TEMPERATURE), not of this prompt.
+    return await gateway.complete(
         messages,
-        temperature=0.4,
         prompt_key="agents/content/writer",
         prompt_version="content-writer.v1",
     )
-    return _parse_markdown(response.text, brief, synthesis_mode=SynthesisMode.LLM)
 
 
 def _constraints_block(brief: ContentBrief, voice: dict[str, Any]) -> str:
@@ -288,19 +319,24 @@ def sections_from_markdown(text: str) -> list[ContentSection]:
 
     Used for model output and for a version a person writes, so a written
     draft's headings count towards the brief's required sections however it
-    was submitted. Text before the first ``##`` heading belongs to no section.
+    was submitted. Text before the first section heading belongs to no section.
     """
+    lines = text.strip().splitlines()
+    # Section headings are level two; a document with none but level-three
+    # headings (some models never use H2) is read at level three instead.
+    level = 2 if any(line.startswith("## ") for line in lines) else 3
+    marker = "#" * level + " "
     sections: list[ContentSection] = []
     current: ContentSection | None = None
     buffer: list[str] = []
-    for line in text.strip().splitlines():
+    for line in lines:
         if line.startswith("# "):
             continue
-        if line.startswith("## "):
+        if line.startswith(marker):
             if current is not None:
                 current.body = "\n".join(buffer).strip()
                 sections.append(current)
-            current = ContentSection(heading=line[3:].strip(), level=2, body="")
+            current = ContentSection(heading=line[len(marker) :].strip(), level=level, body="")
             buffer = []
             continue
         buffer.append(line)
@@ -310,9 +346,39 @@ def sections_from_markdown(text: str) -> list[ContentSection]:
     return sections
 
 
+_CHATTER = re.compile(
+    r"^(sure|certainly|of course|okay|ok|absolutely|here is|here's|below is|the following is)"
+    r"\b[^\n]*:\s*$",
+    re.IGNORECASE,
+)
+
+
+def _drop_leading_chatter(lines: list[str]) -> list[str]:
+    while lines and (not lines[0].strip() or _CHATTER.match(lines[0].strip())):
+        lines = lines[1:]
+    return lines
+
+
+def normalise_markdown(text: str) -> str:
+    """Bring any model's Markdown answer to the shape the parser expects.
+
+    Models differ in how they wrap an answer: some open with a line of chatter
+    ("Sure — here is the article:"), some fence the whole document in a code
+    block and add a remark after it. The wrapper is removed; the content itself
+    is never rewritten.
+    """
+    lines = _drop_leading_chatter((text or "").strip().splitlines())
+    if lines and lines[0].strip().startswith("```"):
+        closing = next((i for i in range(1, len(lines)) if lines[i].strip() == "```"), len(lines))
+        # Anything after the closing fence is a remark about the answer.
+        lines = _drop_leading_chatter(lines[1:closing])
+    return "\n".join(lines).strip()
+
+
 def _parse_markdown(
     text: str, brief: ContentBrief, *, synthesis_mode: SynthesisMode
 ) -> ContentDraft:
+    text = normalise_markdown(text)
     title = markdown_title(text) or brief.title
     sections = sections_from_markdown(text)
 
@@ -573,6 +639,7 @@ def available_platforms() -> tuple[str, ...]:
 
 
 __all__ = [
+    "OUTLINE_MARKER",
     "OUTLINE_NOTICE",
     "PLATFORM_SPECS",
     "available_platforms",
@@ -580,6 +647,7 @@ __all__ = [
     "build_update_plan",
     "generate_draft",
     "markdown_title",
+    "normalise_markdown",
     "repurpose",
     "sections_from_markdown",
     "slugify",

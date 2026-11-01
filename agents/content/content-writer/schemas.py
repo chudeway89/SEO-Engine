@@ -20,3 +20,5 @@ class ContentWriterOutput(BaseModel):
     drafts_written: int = 0
     outlines: int = 0
     drafts: list[dict[str, Any]] = Field(default_factory=list)
+    #: Briefs whose asset the writer must not overwrite, with the reason.
+    skipped: list[dict[str, Any]] = Field(default_factory=list)

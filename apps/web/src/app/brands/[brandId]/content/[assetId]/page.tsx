@@ -169,9 +169,9 @@ export default function ContentDetailPage() {
 
       {outline && (
         <div className="mb-4 rounded border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
-          The current version is a structured outline, not prose: no language model is
-          configured, so no article text was generated. Write the piece below — the outline’s
-          headings are pre-filled — then run the review.
+          The current version is a structured outline, not prose: no model wrote it (none is
+          connected, or the connected one could not), so no article text was generated. Write
+          the piece below — the outline’s headings are pre-filled — then run the review.
         </div>
       )}
 

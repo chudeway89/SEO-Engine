@@ -9,11 +9,17 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 WorkflowEngineName = Literal["local", "temporal"]
-LLMProviderName = Literal["anthropic", "openai", "deterministic"]
+
+#: Alternative spellings of the built-in provider names.
+LLM_PROVIDER_ALIASES: dict[str, str] = {
+    "openai": "openai_compatible",
+    "none": "deterministic",
+    "": "deterministic",
+}
 
 
 class Settings(BaseSettings):
@@ -41,15 +47,36 @@ class Settings(BaseSettings):
     credential_encryption_key: str | None = None
     secret_provider: Literal["local", "env"] = "local"
 
-    # --- LLM ---------------------------------------------------------------
-    llm_provider: LLMProviderName = "deterministic"
+    # --- Language model (optional) ----------------------------------------
+    # The platform is model-agnostic and runs completely without a model: every
+    # analysis, decision and gate is deterministic, and the one stage that
+    # benefits from a model (the content writer's prose) degrades to an honest
+    # outline. Connecting a model is a choice of protocol, endpoint and model
+    # name; nothing in the codebase assumes a particular vendor or model.
+    #
+    # * ``deterministic`` — no model (the default).
+    # * ``openai_compatible`` — any endpoint speaking the Chat Completions
+    #   protocol: hosted APIs and local servers alike. ``openai`` is an alias.
+    # * ``anthropic`` — any model served through the Anthropic Messages API.
+    # * any other name registered with ``seo_engine.shared.llm.register_provider``.
+    llm_provider: str = "deterministic"
     llm_api_key: str | None = None
-    llm_model: str = "claude-opus-5-5"
-    # Optional override of the provider's API endpoint (a proxy or a compatible
-    # gateway). Unset uses the provider's own default.
+    # No default: the operator names the model they connected.
+    llm_model: str | None = None
+    # The endpoint. Required for a keyless local server; optional for a hosted
+    # API (its public endpoint is used when unset).
     llm_base_url: str | None = None
     llm_max_output_tokens: int = 4096
     llm_timeout_seconds: int = 120
+    # Sampling temperature. Unset sends none, so the model's own default applies
+    # (some models reject the parameter outright).
+    llm_temperature: float | None = None
+    # Retries for transient provider failures (timeouts, 429, 5xx).
+    llm_max_retries: int = 2
+    # Operator-supplied prices, USD per million tokens, for the usage ledger.
+    # Unset means the cost of a call is recorded as unknown, never as zero.
+    llm_input_price_per_mtok: float | None = None
+    llm_output_price_per_mtok: float | None = None
 
     # --- Google ------------------------------------------------------------
     google_client_id: str | None = None
@@ -96,6 +123,39 @@ class Settings(BaseSettings):
     @classmethod
     def _strip(cls, value: str) -> str:
         return value.strip()
+
+    @field_validator("llm_provider")
+    @classmethod
+    def _provider_name(cls, value: str) -> str:
+        value = (value or "deterministic").strip().lower()
+        return LLM_PROVIDER_ALIASES.get(value, value)
+
+    @field_validator("llm_model", "llm_base_url", "llm_api_key")
+    @classmethod
+    def _blank_is_unset(cls, value: str | None) -> str | None:
+        # ``LLM_MODEL=`` in an env file means "not set", not "a model called ''".
+        return value.strip() or None if isinstance(value, str) else value
+
+    @field_validator(
+        "llm_temperature", "llm_input_price_per_mtok", "llm_output_price_per_mtok", mode="before"
+    )
+    @classmethod
+    def _blank_number_is_unset(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @model_validator(mode="after")
+    def _model_is_named_when_a_provider_is(self) -> Settings:
+        if self.llm_provider != "deterministic" and not self.llm_model:
+            raise ValueError(
+                f"LLM_PROVIDER={self.llm_provider} needs LLM_MODEL: name the model you "
+                "connected. There is no default model; set LLM_PROVIDER=deterministic to "
+                "run without one."
+            )
+        return self
+
+    def llm_configured(self) -> bool:
+        """Whether an operator has connected a language model."""
+        return self.llm_provider != "deterministic"
 
     @property
     def cors_origin_list(self) -> list[str]:

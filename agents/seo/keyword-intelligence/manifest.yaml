@@ -31,8 +31,6 @@ autonomous_actions: []
 approval_required_for: []
 
 model_policy:
-  reasoning: medium
-  temperature: 0.1
   deterministic_fallback: true
 
 prompt: agents/seo/keyword-intelligence

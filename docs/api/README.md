@@ -7,7 +7,9 @@ envelope. It contains no agent logic and no SQL.
 - **Base URL:** `/api/v1`
 - **Interactive docs:** `/docs` (Swagger), `/redoc` (ReDoc)
 - **Machine-readable spec:** `/api/v1/openapi.json`
-- **Health:** `GET /healthz` (liveness), `GET /readyz` (readiness — the database)
+- **Health:** `GET /healthz` (liveness), `GET /readyz` (readiness — the database;
+  it also reports which language model, if any, is in use, and why a configured
+  one is not usable — a model is never a readiness condition)
 
 ## The envelope
 

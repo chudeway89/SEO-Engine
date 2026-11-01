@@ -89,28 +89,48 @@ can bypass it. It enforces:
 - **No fabricated metrics (Rule 14):** evidence provenance is checked;
   near-certain confidence on an inference is rejected.
 
-## Synthesis modes
+## Synthesis modes and models
 
-Most MVP agents are `deterministic`: their structured output comes entirely from
-the deterministic engines, with no model call. A `hybrid` agent may additionally
-produce a narrative summary from a model — but the model only narrates what the
-deterministic path already decided. It never produces a figure, a decision or an
-action. The `ModelGateway`'s deterministic provider raises
-`DeterministicFallbackRequired` rather than inventing prose, so a model-less
-deployment still runs every agent and simply omits the narration.
+SEO Engine is **model-agnostic** and **model-optional**.
 
-Set `LLM_PROVIDER=anthropic` (default model `claude-opus-5-5`) or
-`LLM_PROVIDER=openai`, with `LLM_API_KEY`, to give the content writer a model;
-`LLM_BASE_URL` points either provider at a compatible endpoint. A run whose
-drafts came from a model reports `synthesis_mode: hybrid`. Tests inject a
-gateway through `services["model_gateway"]` (see `tests/fixtures/models.py`);
-the providers themselves are tested against in-process fakes of each API.
+* **No model is required.** Every agent is `deterministic` at its core: its
+  structured output — figures, findings, decisions, actions — comes from the
+  deterministic engines. The `ModelGateway`'s default provider raises
+  `DeterministicFallbackRequired` rather than inventing prose, so a model-less
+  deployment runs every agent and every mission. Each manifest's
+  `model_policy.deterministic_fallback` must be `true`; a manifest that says
+  otherwise is rejected at load.
+* **Any model can be connected.** A provider speaks a protocol, not a model:
+  `openai_compatible` (any Chat Completions endpoint, hosted or local, keyless
+  servers included), `anthropic` (any model on the Messages API), or anything
+  registered with `seo_engine.shared.llm.register_provider`. The operator names
+  the model (`LLM_MODEL`); there is no default model, and no agent can pin one —
+  manifests carry no model, temperature or reasoning settings. Sampling is sent
+  only if the operator sets it, and a parameter a model rejects is dropped and
+  the request repeated.
+* **A model never decides anything.** Only the content writer (CNT-004) calls a
+  model, and only to write prose inside a brief it did not author. A run whose
+  drafts a model wrote reports `synthesis_mode: hybrid`.
+* **A failing model never stops the platform.** Transient failures are retried;
+  a model that is unreachable, misconfigured, returns nothing usable, or is cut
+  off at the output limit is handled like no model (or flagged, for a cut-off
+  draft), and the run's limitations say why. Reasoning blocks some models emit
+  inline (`<think>…</think>`) are stripped before anything sees the text.
+* **Every call is attributable.** The runtime gives each run its own gateway
+  view and records every model call in `llm_usage` against the run: provider,
+  model, tokens and stop reason as reported, and cost from operator-configured
+  prices — `NULL`, never zero, when unknown. `GET /readyz` reports which model,
+  if any, is in use and why a configured one is not usable.
+
+Tests inject a gateway through `services["model_gateway"]` with a scripted
+provider that stands in for any model (`tests/fixtures/models.py`); both
+protocol providers are tested against in-process fakes of their APIs.
 
 ## The MVP agents
 
 All 36 agents named by the build prompt are implemented. Each is deterministic
-at its core; only the content writer uses a model, and only to write prose
-inside a brief it did not author.
+at its core and runs without a model; only the content writer can use one, and
+only to write prose inside a brief it did not author.
 
 | ID | Agent | Risk | Deterministic core |
 | --- | --- | --- | --- |

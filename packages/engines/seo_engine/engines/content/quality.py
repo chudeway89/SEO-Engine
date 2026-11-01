@@ -23,7 +23,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from seo_engine.engines.content.generation import OUTLINE_NOTICE
+from seo_engine.engines.content.generation import OUTLINE_MARKER
 from seo_engine.engines.keywords.pipeline import content_tokens, jaccard
 from seo_engine.schemas.content import ContentBrief, ContentDraft, ContentEvaluation
 from seo_engine.schemas.enums import HIGH_RISK_CATEGORIES
@@ -56,7 +56,7 @@ def is_template_variant(left: set[str], right: set[str]) -> bool:
 
 
 def is_outline(draft: ContentDraft) -> bool:
-    return OUTLINE_NOTICE in (draft.body_markdown or "")
+    return OUTLINE_MARKER in (draft.body_markdown or "")
 
 
 @dataclass(slots=True)

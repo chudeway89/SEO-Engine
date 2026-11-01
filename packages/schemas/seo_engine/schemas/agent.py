@@ -26,18 +26,34 @@ from seo_engine.schemas.evidence import EvidenceRecord
 # Manifest
 # ---------------------------------------------------------------------------
 class ModelPolicy(BaseModel):
-    """How the model gateway should serve this agent."""
+    """What an agent needs from a language model — never which model.
 
-    reasoning: Literal["low", "medium", "high"] = "medium"
-    temperature: float = Field(ge=0.0, le=2.0, default=0.2)
-    max_output_tokens: int = Field(gt=0, default=4096)
+    The platform is model-agnostic: the model, and its sampling or reasoning
+    settings, belong to the deployment (the ``LLM_*`` settings), so any model
+    can serve any agent and an agent cannot pin one. And it must run without
+    any model at all: every agent declares a deterministic path, and a
+    manifest that does not is rejected when the registry loads it.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     deterministic_fallback: bool = Field(
         default=True,
         description=(
-            "When true the agent can complete without an LLM provider, using its "
-            "deterministic path.  Outputs are labelled synthesis_mode=deterministic."
+            "The agent completes without a language model, using its deterministic "
+            "path; its output is then labelled synthesis_mode=deterministic. Required."
         ),
     )
+
+    @field_validator("deterministic_fallback")
+    @classmethod
+    def _must_run_without_a_model(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError(
+                "every agent must be able to complete without a language model; "
+                "deterministic_fallback cannot be false"
+            )
+        return value
 
 
 class CapabilityGrant(BaseModel):
