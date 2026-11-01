@@ -102,8 +102,19 @@ def _issue(
     )
 
 
+#: Content types the page checks apply to. Anything else (a PDF, an image) is
+#: still observed for its status code, but has no title, headings or copy to
+#: judge, so the HTML checks do not run on it.
+_HTML_TYPES = ("text/html", "application/xhtml+xml")
+
+
+def _is_html(page: CrawlPage) -> bool:
+    # A missing Content-Type is treated as HTML, as browsers sniff it.
+    return not page.content_type or any(t in page.content_type.lower() for t in _HTML_TYPES)
+
+
 def _indexable(page: CrawlPage) -> bool:
-    return page.is_indexable and not page.is_redirect
+    return page.is_indexable and not page.is_redirect and _is_html(page)
 
 
 # ---------------------------------------------------------------------------

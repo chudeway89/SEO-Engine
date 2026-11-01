@@ -344,3 +344,25 @@ def test_agentic_web_readiness_scores_the_documented_signals(crawl: CrawlResult)
 def test_check_context_counts_inbound_links(crawl: CrawlResult) -> None:
     ctx = CheckContext.build(crawl)
     assert ctx.inbound_links.get(f"{BASE}/services/dna-testing", 0) >= 1
+
+
+def test_a_linked_pdf_is_not_audited_as_an_html_page() -> None:
+    """Non-HTML responses keep their status code but face no HTML checks."""
+    from seo_engine.engines.seo.checks import run_all_checks
+    from seo_engine.schemas.crawl import CrawlPage
+
+    pdf = CrawlPage(
+        url=f"{BASE}/leaflet.pdf",
+        status_code=200,
+        content_type="application/pdf",
+        fetched_at=utcnow(),
+    )
+    result = CrawlResult(
+        website_id="w",
+        start_url=f"{BASE}/",
+        config=CrawlConfig(start_url=f"{BASE}/"),
+        pages=[pdf],
+        started_at=utcnow(),
+    )
+    flagged = {i.check_id for i in run_all_checks(result) if i.url == pdf.url}
+    assert not flagged & {"missing_title", "empty_page", "missing_h1", "missing_meta_description"}
