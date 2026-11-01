@@ -1,0 +1,133 @@
+# ---------------------------------------------------------------------------
+# SEO Engine — local development stack.
+#
+#   docker compose up
+#
+# brings up PostgreSQL (with pgvector), Redis, Temporal and its UI, the API,
+# the worker and the web frontend. The API container runs migrations and seeds
+# the demo tenant on first start, so a fresh `up` lands on a working product.
+#
+# These are development defaults. Never run them in production: the secrets
+# here are placeholders, and `Never commit actual values` (Build Spec §73).
+# ---------------------------------------------------------------------------
+name: seo-engine
+
+x-app-env: &app-env
+  DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/seo_engine
+  REDIS_URL: redis://redis:6379/0
+  TEMPORAL_ADDRESS: temporal:7233
+  TEMPORAL_NAMESPACE: default
+  TEMPORAL_TASK_QUEUE: seo-engine
+  WORKFLOW_ENGINE: ${WORKFLOW_ENGINE:-local}
+  JWT_SECRET: ${JWT_SECRET:-development-secret-do-not-use-in-production}
+  LLM_PROVIDER: ${LLM_PROVIDER:-deterministic}
+  LLM_API_KEY: ${LLM_API_KEY:-}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:-}
+  ENVIRONMENT: development
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: seo_engine
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d seo_engine"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Temporal is only used when WORKFLOW_ENGINE=temporal; it is harmless to run
+  # either way, and the worker connects to it only in that mode.
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PWD: postgres
+      POSTGRES_SEEDS: postgres
+    ports:
+      - "7233:7233"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  temporal-ui:
+    image: temporalio/ui:2.31.2
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8080:8080"
+    depends_on:
+      - temporal
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      <<: *app-env
+      API_CORS_ORIGINS: http://localhost:3000
+    command: >
+      sh -c "python -m alembic upgrade head
+      && (python -m seo_engine.database.seed || true)
+      && uvicorn seo_engine.api.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      <<: *app-env
+    command: ["python", "-m", "seo_engine.worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:

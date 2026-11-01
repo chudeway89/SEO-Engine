@@ -1,0 +1,38 @@
+id: SEO-006
+name: Content Gap Agent
+version: 1.0.0
+
+description: >
+  For each topic cluster decides exactly one of CREATE, UPDATE, CONSOLIDATE,
+  REDIRECT or DO_NOTHING, biased against new pages, and records the
+  reasoning as evidence.
+
+module: agent.py
+
+capabilities:
+  - seo.content.gap
+
+tools:
+  - memory
+
+memory_scopes:
+  - brand
+
+risk_level: low
+
+input_schema: ContentGapInput
+output_schema: ContentGapOutput
+
+autonomous_actions: []
+
+approval_required_for: []
+
+model_policy:
+  reasoning: medium
+  temperature: 0.1
+  deterministic_fallback: true
+
+prompt: agents/seo/content-gap
+tags:
+  - seo
+  - content
