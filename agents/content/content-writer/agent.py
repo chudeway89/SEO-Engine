@@ -71,7 +71,9 @@ class ContentWriterAgent(BaseAgent):
         outlines = 0
         for record in records:
             brief = content.brief_contract(record)
-            draft = await generate_draft(brief, brand_voice=facts.voice)
+            draft = await generate_draft(
+                brief, gateway=context.services.get("model_gateway"), brand_voice=facts.voice
+            )
             outline = is_outline(draft)
             outlines += int(outline)
 

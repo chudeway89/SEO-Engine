@@ -82,6 +82,10 @@ can bypass it. It enforces:
   manifest lists. An empty declaration denies everything.
 - **Approval for risk:** a high-risk recommendation or action that does not set
   `requires_approval` fails.
+- **The approval floor:** an action type the manifest lists under
+  `approval_required_for` waits for a person *whatever policy allows*. The floor
+  is enforced where the action is created (`DecisionService.propose_action(...,
+  approval_floor=...)`), so the stricter of policy and manifest always wins.
 - **No fabricated metrics (Rule 14):** evidence provenance is checked;
   near-certain confidence on an inference is rejected.
 
@@ -94,6 +98,13 @@ deterministic path already decided. It never produces a figure, a decision or an
 action. The `ModelGateway`'s deterministic provider raises
 `DeterministicFallbackRequired` rather than inventing prose, so a model-less
 deployment still runs every agent and simply omits the narration.
+
+Set `LLM_PROVIDER=anthropic` (default model `claude-opus-5-5`) or
+`LLM_PROVIDER=openai`, with `LLM_API_KEY`, to give the content writer a model;
+`LLM_BASE_URL` points either provider at a compatible endpoint. A run whose
+drafts came from a model reports `synthesis_mode: hybrid`. Tests inject a
+gateway through `services["model_gateway"]` (see `tests/fixtures/models.py`);
+the providers themselves are tested against in-process fakes of each API.
 
 ## The MVP agents
 
@@ -164,6 +175,30 @@ run for the sake of coverage).
   a draft to review; a person approves it (`POST /content/{id}/approve`); the
   publishing agent then proposes `cms.publish`, which the policy engine gates and a
   person approves again where policy requires.
+* **A person can write what a model could not.** Without a model the writer
+  leaves an outline. A person writes the piece (`POST /content/{id}/versions`, or
+  the content screen in the web app), and `POST /content/{id}/review` runs
+  CNT-007, CNT-009 and POL-001 against that exact version through the runtime.
+  A version is labelled with who wrote it: `llm`, `deterministic` (an outline)
+  or `human`.
+* **Approved SEO changes are applied, not guessed.** Seeds carry a concrete
+  change specification (`data["change"]`: the exact new title, the link to add)
+  through opportunity → recommendation → action. EXE-001 applies an approved
+  `seo.metadata_update` (page title) or `seo.internal_link_add` through the
+  brand's connected CMS (`integrations.cms.changes`). An approved action without
+  a concrete change, or of a kind with no safe general executor (structured
+  data, redirects), is reported and left approved for a person — never invented,
+  never marked failed. A draft action needs the written draft; an empty CMS
+  draft is never created.
+
+## Golden evaluation datasets
+
+`tests/evaluation/golden/*.json` holds data-driven cases (a brand fixture, the
+agent's inputs, and expectations on its output, findings, recommendations and
+limitations) that `tests/evaluation/test_golden.py` runs through the real
+runtime. They currently cover BRD-001, BRD-003, ORCH-001, CNT-001 and CMP-003;
+every other agent's behaviour is asserted in `tests/agent/`. Add a case by adding
+JSON — no code.
 
 ## Writing a new agent
 

@@ -16,6 +16,7 @@ capabilities:
 
 tools:
   - crawler
+  - gsc
   - memory
 
 memory_scopes:

@@ -518,7 +518,15 @@ def content_version(row: Any) -> dict[str, Any]:
         "word_count": row.word_count,
         "change_summary": row.change_summary,
         "synthesis_mode": row.synthesis_mode,
+        "sections": row.sections or [],
+        "cta": (row.metadata_json or {}).get("cta"),
+        "cited_source_urls": [
+            str(source.get("url"))
+            for source in (row.metadata_json or {}).get("cited_sources", [])
+            if isinstance(source, dict) and source.get("url")
+        ],
         "created_by_agent": row.created_by_agent,
+        "created_by_user": str(row.created_by_user) if row.created_by_user else None,
         "brief_id": str(row.brief_id) if row.brief_id else None,
         "created_at": _iso(row.created_at),
     }
@@ -563,4 +571,19 @@ def content_representation(row: Any) -> dict[str, Any]:
         "body": row.body,
         "canonical_source_url": row.canonical_source_url,
         "status": row.status,
+    }
+
+
+def content_source(row: Any) -> dict[str, Any]:
+    return {
+        "id": str(row.id),
+        "url": row.url,
+        "title": row.title,
+        "publisher": row.publisher,
+        "tier": row.tier,
+        "reliability": row.reliability,
+        "supports_claim": row.supports_claim,
+        "verified": row.verified,
+        "published_at": _iso(row.published_at),
+        "retrieved_at": _iso(row.retrieved_at),
     }

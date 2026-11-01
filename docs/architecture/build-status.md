@@ -18,11 +18,11 @@ and produces evidence-backed, approval-gated recommendations. This is covered by
 runtime, crawler, engines and database with nothing mocked but the network.
 
 All **36 MVP agents** named by the build prompt are implemented and wired into
-mission graphs. **433 tests pass** (unit, integration, security, agent, workflow
-and migration), `ruff` is clean, `mypy` reports no issues across 128 source
-files, and the API,
-worker, Docker stack, seed and operator CLI exist. The Next.js web application is
-built and was verified end to end through a real browser.
+mission graphs. **473 tests pass** (unit, integration, security, agent,
+workflow, migration and golden evaluation), `ruff` is clean, `mypy` reports no
+issues across 130 source files, and the API, worker, Docker stack, seed and
+operator CLI exist. The Next.js web application builds, and its content screen
+was driven through the whole human writing path in a real browser.
 
 What has deliberately *not* happened, throughout: no placeholder UI, no mocked
 dashboards, no fabricated metrics, no empty agent directories created to look
@@ -49,11 +49,11 @@ it appears.
 | 14–15 | GSC and GA4 integrations | **Done** — production adapters (tested against an in-process fake Google) and labelled development adapters |
 | 16 | Opportunity and recommendation engine | **Done** — detection from observations, the internal prioritisation model, the decision gate |
 | 17 | Policy and approval engine | **Done** — rule evaluation, the automation-policy deferral, the approval matrix |
-| 18 | Action execution framework | **Done** — policy-gated actions, draft-first CMS, outcome records |
+| 18 | Action execution framework | **Done** — policy-gated actions with the manifest approval floor, executors for approved title and internal-link changes, draft-first CMS, outcome records |
 | 19 | Workflows | **Done** — the mission workflow, the local engine, and the Temporal engine + worker |
-| 20 | Web application | **Done** — a Next.js app, built and verified end to end through a real browser |
+| 20 | Web application | **Done** — a Next.js app: brands, integrations, the strategy preview, missions, recommendations, and the content screen (write, review, approve, publish) |
 | 21 | End-to-end mission | **Done** — the canonical mission runs and is asserted end to end |
-| 22 | Test suites | **Done** — unit, integration, security, agent, workflow, migration (433 tests) |
+| 22 | Test suites | **Done** — unit, integration, security, agent, workflow, migration and golden evaluation (473 tests) |
 | 23 | Security hardening | **Done** — isolation, injection boundary, no-fabrication, chain-of-thought and approval all enforced and tested |
 | 24 | Documentation and QA gate | **Done** — the docs, `docs/api`, per-agent docs, and `make gate` (lint + typecheck + full suite, all green) |
 
@@ -91,16 +91,25 @@ still runs, and says so, when SERP is not connected.
   (`*.example`) are never proposed as competitors and a gap resting only on
   synthetic SERP data never becomes an opportunity. The production adapters are
   implemented and tested against in-process fakes.
-- **Without a language model the content writer produces outlines, not prose.**
-  The quality gate blocks outlines, so in a model-less deployment the content
-  pipeline stops, by design, at a tracked "outline needs prose" repair. Nothing
-  is ever published from an outline.
-- **Content is approved through the API** (`POST /content/{id}/approve`). The web
-  application lists agents, missions and recommendations, but has no dedicated
-  content-review screen yet.
-- **Publishing** goes through the brand's connected CMS adapter. The WordPress
-  adapter is implemented; with the development CMS adapter, publication is
+- **No live model call was made in this build.** The Anthropic and OpenAI
+  providers are tested against in-process fakes of each API (request shape,
+  channel separation, usage and errors), and the hybrid writer path is tested
+  with a scripted provider. Without `LLM_API_KEY` the writer produces outlines,
+  never invented prose; a person writes the piece over the outline (the content
+  screen, or `POST /content/{id}/versions`) and the agents review that version.
+- **Live-page executors are deliberately narrow.** An approved page-title change
+  and an approved internal link are applied through WordPress's REST API or the
+  development CMS. Meta descriptions, structured data and redirects live in
+  themes, SEO plugins or server configuration that the CMS content API does not
+  expose, so those approved actions are reported and left for a person. Webflow
+  refuses live-page edits explicitly. With the development CMS every change is
   recorded in `development_adapter` mode and reaches no real site.
-- The **agent evaluation golden datasets** referenced by some agent READMEs are
-  a growing set; the behavioural assertions live in the agent and integration
-  tests today.
+- **A failed agent run triggered inside an API request** (the strategy preview,
+  content review, publish) returns the typed error with its `request_id` and is
+  logged with its error code, but its run record is rolled back with the
+  request. Mission and background runs keep their failed-run records. Keeping
+  them for request-scoped runs needs the runner to isolate an agent's writes in
+  a savepoint, which is a change to the runtime's transaction design.
+- **Golden evaluation datasets** cover five agents (BRD-001, BRD-003, ORCH-001,
+  CNT-001, CMP-003). Every other agent's behaviour is asserted in
+  `tests/agent/`; adding a golden case is adding JSON.

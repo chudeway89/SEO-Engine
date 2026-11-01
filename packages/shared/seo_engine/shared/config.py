@@ -44,7 +44,10 @@ class Settings(BaseSettings):
     # --- LLM ---------------------------------------------------------------
     llm_provider: LLMProviderName = "deterministic"
     llm_api_key: str | None = None
-    llm_model: str = "claude-sonnet-5"
+    llm_model: str = "claude-opus-5-5"
+    # Optional override of the provider's API endpoint (a proxy or a compatible
+    # gateway). Unset uses the provider's own default.
+    llm_base_url: str | None = None
     llm_max_output_tokens: int = 4096
     llm_timeout_seconds: int = 120
 

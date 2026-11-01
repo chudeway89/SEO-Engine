@@ -275,18 +275,26 @@ def _schema_for(brief: ContentBrief) -> dict[str, Any] | None:
     }
 
 
-def _parse_markdown(
-    text: str, brief: ContentBrief, *, synthesis_mode: SynthesisMode
-) -> ContentDraft:
-    lines = text.strip().splitlines()
-    title = brief.title
+def markdown_title(text: str) -> str | None:
+    """The first level-one heading of a Markdown document, if it has one."""
+    for line in text.strip().splitlines():
+        if line.startswith("# ") and line[2:].strip():
+            return line[2:].strip()
+    return None
+
+
+def sections_from_markdown(text: str) -> list[ContentSection]:
+    """Split a Markdown document into its level-two sections.
+
+    Used for model output and for a version a person writes, so a written
+    draft's headings count towards the brief's required sections however it
+    was submitted. Text before the first ``##`` heading belongs to no section.
+    """
     sections: list[ContentSection] = []
     current: ContentSection | None = None
     buffer: list[str] = []
-
-    for line in lines:
+    for line in text.strip().splitlines():
         if line.startswith("# "):
-            title = line[2:].strip() or title
             continue
         if line.startswith("## "):
             if current is not None:
@@ -299,6 +307,14 @@ def _parse_markdown(
     if current is not None:
         current.body = "\n".join(buffer).strip()
         sections.append(current)
+    return sections
+
+
+def _parse_markdown(
+    text: str, brief: ContentBrief, *, synthesis_mode: SynthesisMode
+) -> ContentDraft:
+    title = markdown_title(text) or brief.title
+    sections = sections_from_markdown(text)
 
     used_links = [link for link in brief.internal_links if link.url in text]
     return ContentDraft(
@@ -563,6 +579,8 @@ __all__ = [
     "build_outline",
     "build_update_plan",
     "generate_draft",
+    "markdown_title",
     "repurpose",
+    "sections_from_markdown",
     "slugify",
 ]

@@ -56,7 +56,7 @@ domain services — never the database directly (Rule 4).
 | Mode | Behaviour |
 | --- | --- |
 | No open brief | Writes nothing. |
-| No model | Outlines only, stated as a limitation. |
+| No model | Outlines only, stated as a limitation; a person writes the piece over the outline (`POST /content/{id}/versions` or the content screen) and asks for review. |
 
 Nothing here is hidden, faked or skipped on failure: the run records the error,
 and the agent reports a limitation rather than fabricating a result.

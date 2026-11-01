@@ -139,6 +139,14 @@ class OnPageAgent(BaseAgent):
                         "keyword": alignment.keyword,
                         "proposed_title": alignment.proposed_title,
                         "meta_guidance": alignment.meta_guidance,
+                        # The exact change an executor may apply once approved. Only
+                        # the title is concrete; the meta description is left to a
+                        # writer and never generated.
+                        "change": (
+                            {"title": alignment.proposed_title}
+                            if alignment.proposed_title
+                            else None
+                        ),
                     },
                 )
             )

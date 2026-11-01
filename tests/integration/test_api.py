@@ -274,3 +274,262 @@ async def test_content_cannot_be_approved_before_it_passes_the_gate(
     refused = await client.post(f"/api/v1/content/{asset_id}/approve", headers=headers, json={})
     assert refused.status_code == 409
     assert "quality gate" in refused.json()["error"]["message"]
+
+
+# --- the human writing path -------------------------------------------------
+HUMAN_PROSE = (
+    "The price of a DNA test depends on what the result will be used for. A test "
+    "for personal knowledge needs less paperwork than one a court will rely on, "
+    "because a legal test requires a documented chain of custody from the moment "
+    "the sample is taken. Most people choose a home kit, which typically arrives "
+    "within two working days. The laboratory then analyses the sample and, in most "
+    "cases, reports within a week. Prices usually reflect the number of people "
+    "tested and how quickly the result is needed. Our laboratory is UKAS accredited "
+    "for DNA testing, and the accreditation covers both home and legal tests. Before "
+    "you order, check whether a solicitor or a court has asked for a particular "
+    "kind of test, because a home kit cannot be upgraded later. If you are unsure "
+    "which test you need, our team can explain the options and what each one can "
+    "and cannot tell you. Book a test when you are ready."
+)
+
+
+async def _principal(client: httpx.AsyncClient, headers: dict[str, str]):
+    from seo_engine.permissions.rbac import Principal
+    from seo_engine.schemas.enums import Role
+
+    me = (await client.get("/api/v1/auth/me", headers=headers)).json()["data"]
+    return Principal.build(
+        user_id=uuid.UUID(me["user_id"]),
+        tenant_id=uuid.UUID(me["tenant"]["id"]),
+        email=me["email"],
+        role=Role.OWNER,
+    )
+
+
+async def test_a_person_writes_reviews_approves_and_publishes_an_outlined_piece(
+    client: httpx.AsyncClient,
+) -> None:
+    """No model is configured, so the writer leaves an outline. A person writes
+    the piece over HTTP; the agents review that exact version; a person approves
+    it; publication waits for the action approval a health brand requires."""
+    from datetime import UTC, datetime
+
+    from seo_engine.domain.seed.demo import build_demo_brand
+    from seo_engine.domain.services import ContentService
+    from seo_engine.engines.content.generation import OUTLINE_NOTICE, generate_draft
+    from seo_engine.schemas.content import ContentBrief
+    from seo_engine.schemas.enums import RiskCategory, SourceTier
+    from seo_engine.schemas.evidence import SourceReference
+    from seo_engine.shared.db import session_scope
+    from seo_engine.shared.llm import DeterministicProvider, ModelGateway
+
+    headers = _auth((await _register(client))["data"]["tokens"]["access_token"])
+    principal = await _principal(client, headers)
+    async with session_scope() as session:
+        scenario = await build_demo_brand(session, principal)
+        content = ContentService(session, principal)
+        brief = ContentBrief(
+            title="How much does a DNA test cost?",
+            primary_topic="dna test cost",
+            primary_keyword="dna test cost",
+            audience="Expectant parents",
+            business_goal="Qualified enquiries",
+            unique_value_proposition="Accredited pricing explained plainly",
+            required_sections=["What affects the price"],
+            prohibited_claims=["Our tests are 100% accurate."],
+            approved_claims=["Our laboratory is UKAS accredited for DNA testing."],
+            risk_category=RiskCategory.HEALTH,
+            target_word_count=120,
+            cta="Book a test",
+        )
+        record = await content.save_brief(scenario.brand.id, brief)
+        outline = await generate_draft(brief, gateway=ModelGateway(DeterministicProvider()))
+        asset = await content.create_asset(
+            scenario.brand.id,
+            title=outline.title,
+            slug=outline.slug,
+            url=f"https://acme.test/guides/{outline.slug}",
+            risk_category=RiskCategory.HEALTH,
+            primary_keyword="dna test cost",
+        )
+        await content.add_version(asset, outline, change_summary="outline", brief_id=record.id)
+        await content.link_brief_to_asset(record.id, asset.id)
+        # The register entry RES-006 records once it has fetched a source (its
+        # fetch-to-verify path is tested with the agent).
+        await content.add_sources(
+            scenario.brand.id,
+            [
+                SourceReference(
+                    url="https://www.ukas.com/accreditation/",
+                    title="UKAS accreditation",
+                    retrieved_at=datetime.now(UTC),
+                    tier=SourceTier.TIER_2_AUTHORITATIVE,
+                    reliability=0.85,
+                    verified=True,
+                )
+            ],
+        )
+        asset_id = str(asset.id)
+        brand_id = str(scenario.brand.id)
+
+    # The outline is reviewed and blocked: it is not the piece.
+    review = await client.post(f"/api/v1/content/{asset_id}/review", headers=headers)
+    assert review.status_code == 200, review.text
+    data = review.json()["data"]
+    assert [r["agent_id"] for r in data["runs"]] == ["CNT-007", "CNT-009", "POL-001"]
+    gate = data["runs"][1]["output"]["results"][0]
+    assert any("outline" in b for b in gate["blocking"])
+    assert data["asset"]["status"] == "draft"
+
+    # Submitting the outline unchanged is refused; it is not human prose.
+    laundered = await client.post(
+        f"/api/v1/content/{asset_id}/versions",
+        headers=headers,
+        json={"title": "T", "body_markdown": f"{OUTLINE_NOTICE}\n\nbody"},
+    )
+    assert laundered.status_code == 422
+
+    piece = {
+        "title": "How much does a DNA test cost?",
+        "meta_description": "What a DNA test costs, what changes the price, and how to choose.",
+        "body_markdown": (
+            "# How much does a DNA test cost?\n\n## What affects the price\n\n" + HUMAN_PROSE
+        ),
+        # No explicit sections: the body's own headings are the structure.
+        "change_summary": "Wrote the piece over the outline",
+    }
+    # A source outside the register cannot be cited into the piece.
+    unregistered = await client.post(
+        f"/api/v1/content/{asset_id}/versions",
+        headers=headers,
+        json={**piece, "cited_source_urls": ["https://made-up.example/study"]},
+    )
+    assert unregistered.status_code == 422
+    assert unregistered.json()["error"]["details"]["unregistered"] == [
+        "https://made-up.example/study"
+    ]
+
+    register = (await client.get(f"/api/v1/brands/{brand_id}/sources", headers=headers)).json()
+    assert [s["verified"] for s in register["data"]] == [True]
+    written = await client.post(
+        f"/api/v1/content/{asset_id}/versions",
+        headers=headers,
+        json={**piece, "cited_source_urls": [register["data"][0]["url"]]},
+    )
+    assert written.status_code == 201, written.text
+    version = written.json()["data"]["version"]
+    assert version["version"] == 2 and version["synthesis_mode"] == "human"
+    assert version["created_by_user"] == str(principal.user_id)
+    assert version["created_by_agent"] is None
+
+    review = (await client.post(f"/api/v1/content/{asset_id}/review", headers=headers)).json()
+    runs = {r["agent_id"]: r for r in review["data"]["runs"]}
+    evaluation = runs["CNT-007"]["output"]["evaluations"][0]
+    assert evaluation["version_id"] == version["id"], "the review is of the version just written"
+    gate = runs["CNT-009"]["output"]["results"][0]
+    assert gate["blocking"] == [], gate
+    assert review["data"]["asset"]["status"] == "in_review", review["data"]
+    detail = (await client.get(f"/api/v1/content/{asset_id}", headers=headers)).json()["data"]
+    quality = next(
+        e
+        for e in detail["current_version_evaluations"]
+        if e["evaluation_type"] == "quality_evaluation"
+    )
+    completeness = next(c for c in quality["criteria"] if c["criterion"] == "completeness")
+    assert completeness["passed"], "the written headings count as the brief's sections"
+
+    approved = await client.post(
+        f"/api/v1/content/{asset_id}/approve", headers=headers, json={"note": "clinically checked"}
+    )
+    assert approved.status_code == 200 and approved.json()["data"]["status"] == "approved"
+
+    # A health brand: the publish action waits for a person.
+    first = (await client.post(f"/api/v1/content/{asset_id}/publish", headers=headers)).json()
+    waiting = first["data"]["run"]["output"]["awaiting_action_approval"]
+    assert len(waiting) == 1 and first["data"]["asset"]["status"] == "approved"
+    action = await client.post(
+        f"/api/v1/actions/{waiting[0]['action_id']}/approve", headers=headers, json={}
+    )
+    assert action.status_code == 200, action.text
+
+    second = (await client.post(f"/api/v1/content/{asset_id}/publish", headers=headers)).json()
+    assert len(second["data"]["run"]["output"]["published"]) == 1
+    assert second["data"]["asset"]["status"] == "published"
+    assert any("development" in lim.lower() for lim in second["data"]["run"]["limitations"]), (
+        "the development CMS says nothing reached a real website"
+    )
+
+    # A published piece takes no new version directly; it goes back to draft first.
+    refused = await client.post(f"/api/v1/content/{asset_id}/versions", headers=headers, json=piece)
+    assert refused.status_code == 409
+    reopened = await client.post(
+        f"/api/v1/content/{asset_id}/return-to-draft", headers=headers, json={"note": "update"}
+    )
+    assert reopened.status_code == 200 and reopened.json()["data"]["status"] == "draft"
+
+
+async def test_a_new_version_needs_a_fresh_review_before_approval(
+    client: httpx.AsyncClient,
+) -> None:
+    from seo_engine.domain.services import ContentService
+    from seo_engine.domain.services.content import EVALUATION_GATE
+    from seo_engine.schemas.content import ContentDraft, ContentEvaluation
+    from seo_engine.shared.db import session_scope
+
+    headers = _auth((await _register(client))["data"]["tokens"]["access_token"])
+    principal = await _principal(client, headers)
+    brand_id = await _brand(client, headers)
+    async with session_scope() as session:
+        content = ContentService(session, principal, acting_as_agent=True)
+        asset = await content.create_asset(uuid.UUID(brand_id), title="T", slug="t")
+        v1 = await content.add_version(
+            asset,
+            ContentDraft(title="T", meta_description="", slug="t", body_markdown="Body"),
+            change_summary="v1",
+        )
+        await content.record_evaluation(
+            asset.id,
+            ContentEvaluation(overall_score=80, passed=True),
+            version_id=v1.id,
+            evaluation_type=EVALUATION_GATE,
+        )
+        asset_id = str(asset.id)
+
+    # A person rewrites it; the asset goes back to draft and v1's pass no
+    # longer counts for the text now current.
+    rewritten = await client.post(
+        f"/api/v1/content/{asset_id}/versions",
+        headers=headers,
+        json={"title": "T", "body_markdown": "A different body"},
+    )
+    assert rewritten.status_code == 201
+    async with session_scope() as session:
+        from seo_engine.schemas.enums import ContentStatus
+
+        await ContentService(session, principal, acting_as_agent=True).set_status(
+            uuid.UUID(asset_id), ContentStatus.IN_REVIEW, reason="forced for the test"
+        )
+    refused = await client.post(f"/api/v1/content/{asset_id}/approve", headers=headers, json={})
+    assert refused.status_code == 409
+    assert "current version" in refused.json()["error"]["message"]
+
+
+async def test_an_integration_can_be_disconnected(client: httpx.AsyncClient) -> None:
+    headers = _auth((await _register(client))["data"]["tokens"]["access_token"])
+    brand_id = await _brand(client, headers)
+    connected = await client.post(
+        f"/api/v1/brands/{brand_id}/integrations", headers=headers, json={"provider": "generic_cms"}
+    )
+    assert connected.json()["data"]["status"] == "connected"
+
+    revoked = await client.delete(
+        f"/api/v1/brands/{brand_id}/integrations/generic_cms", headers=headers
+    )
+    assert revoked.status_code == 200 and revoked.json()["data"]["status"] == "revoked"
+    listing = (await client.get(f"/api/v1/brands/{brand_id}/integrations", headers=headers)).json()
+    assert [c["status"] for c in listing["data"]] == ["revoked"]
+
+    missing = await client.delete(
+        f"/api/v1/brands/{brand_id}/integrations/wordpress", headers=headers
+    )
+    assert missing.status_code == 404

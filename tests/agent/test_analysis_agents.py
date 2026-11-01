@@ -370,3 +370,36 @@ async def test_a_full_mission_feeds_every_seed_into_the_decision_chain(
     assert quality["by_rule"].get("dangling_evidence", 0) == 0, (
         "every recommendation's evidence must resolve after a full mission"
     )
+
+    # A concrete change detected upstream travels with the recommendation, so the
+    # executor can apply exactly what was approved.
+    recommendations = await DecisionService(session, principal).list_recommendations(
+        scenario.brand.id
+    )
+    carried = [
+        r.proposed_action["change"]
+        for r in recommendations
+        if (r.proposed_action or {}).get("change")
+    ]
+    assert carried, "no recommendation carried its concrete change"
+    assert all(c.get("title") or c.get("from_urls") for c in carried)
+
+    # Nothing executes in a mission: every planned action awaits a person.
+    plan = report.outputs["execution_plan"]["execution_plan"]
+    assert plan["actions_executed"] == 0
+    assert plan["actions_awaiting_approval"] == plan["actions_proposed"]
+
+
+async def test_the_audit_reports_search_console_availability_truthfully(
+    harness: AgentHarness, bare_harness: AgentHarness
+) -> None:
+    connected = await harness.crawl()
+    assert not any(
+        "Search Console was unavailable" in lim for lim in connected.result.limitations
+    ), "a connected Search Console must not be reported as unavailable"
+
+    absent = await bare_harness.crawl()
+    assert any(
+        "Search Console was unavailable" in lim and "not connected" in lim
+        for lim in absent.result.limitations
+    )

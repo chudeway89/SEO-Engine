@@ -15,8 +15,10 @@ PRIORITISE → RECOMMEND → APPROVE → ACT → MEASURE → LEARN → MEMORY �
 > each stage through the Agent Runtime against a real crawl, measures a baseline,
 > and produces evidence-backed, approval-gated recommendations; a content mission
 > runs research → brief → draft → evaluation → quality gate → policy review →
-> publishing, and nothing publishes without a person. 433 tests pass against a
-> real PostgreSQL + pgvector database.
+> publishing, and nothing publishes without a person. Without a language model
+> the writer leaves an outline and a person writes the piece in the content
+> screen; approved title and internal-link changes are applied through the
+> connected CMS. 473 tests pass against a real PostgreSQL + pgvector database.
 > See [`docs/architecture/build-status.md`](docs/architecture/build-status.md)
 > for a precise, per-phase account.
 
@@ -35,10 +37,14 @@ PRIORITISE → RECOMMEND → APPROVE → ACT → MEASURE → LEARN → MEMORY �
 | Deterministic engines (crawler, checks, scoring, keywords, competitors, content) | Done | unit + integration tests against an in-process site |
 | GSC / GA4 / SERP / CMS integrations (production + labelled development adapters) | Done | integration tests against in-process fake providers |
 | Opportunity → prioritisation → decision → execution stack | Done | integration + the end-to-end mission |
+| Approved SEO changes applied through the CMS (page title, internal links) | Done | change-execution tests against a fake WordPress REST API and the development CMS |
 | Mission workflow + local and Temporal engines | Done | the end-to-end mission test |
-| FastAPI application (58 paths, one envelope) + worker | Done | 15 API tests through the real ASGI app |
+| FastAPI application (63 paths, one envelope) + worker | Done | 18 API tests through the real ASGI app |
 | 36 MVP agents with manifest, impl, schemas, prompt, README and behavioural tests | Done | registry + catalogue tests; every agent but the planner runs in a mission graph |
 | Content pipeline with human-only approval and gated publishing | Done | content agent tests: outlines never publish; approval and publish action both required |
+| Human writing path (write → review → approve → publish) + web content screen | Done | an API test drives it end to end; the screen was driven in a real browser |
+| Model gateway: Anthropic and OpenAI providers, deterministic fallback | Done | provider tests against in-process fakes of each API; a hybrid-writer agent test |
+| Golden evaluation datasets | Done for 5 agents | data-driven cases run through the real runtime (`tests/evaluation/`) |
 
 A metric the platform cannot measure is `null` with honest provenance.
 Development-mode integration data is labelled synthetic everywhere it appears.

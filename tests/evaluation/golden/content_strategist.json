@@ -1,0 +1,37 @@
+{
+  "agent_id": "CNT-001",
+  "description": "CNT-001: fixes existing pages before creating new ones, respects capacity, and lists DO_NOTHING topics with their reason.",
+  "cases": [
+    {
+      "name": "fix_first_and_bounded",
+      "brand": {"services": [{"name": "DNA testing", "keywords": ["dna test"]}]},
+      "inputs": {
+        "months": 1,
+        "capacity_per_month": 2,
+        "content_gaps": [
+          {"topic": "dna test cost", "decision": "create", "intent": {"transactional": 1}, "confidence": 0.9},
+          {"topic": "paternity test guide", "decision": "create", "intent": {"informational": 1}, "confidence": 0.6},
+          {"topic": "dna testing", "decision": "update", "intent": {"commercial": 1}, "confidence": 0.5, "target_url": "https://golden.test/dna"},
+          {"topic": "pet dna", "decision": "do_nothing", "decision_reason": "no demand and no service"}
+        ]
+      },
+      "expect": [
+        {"path": "outputs.content_strategy.roadmap.items.0.decision", "op": "eq", "value": "update"},
+        {"path": "outputs.content_strategy.roadmap.items.0.service", "op": "eq", "value": "DNA testing"},
+        {"path": "outputs.content_strategy.scheduled", "op": "eq", "value": 2},
+        {"path": "outputs.content_strategy.backlog", "op": "eq", "value": 1},
+        {"path": "outputs.content_strategy.roadmap.not_pursued.0.topic", "op": "eq", "value": "pet dna"},
+        {"path": "limitations", "op": "any_contains", "value": "backlog"}
+      ]
+    },
+    {
+      "name": "no_gaps_no_roadmap",
+      "brand": {},
+      "inputs": {"content_gaps": []},
+      "expect": [
+        {"path": "outputs", "op": "not_contains", "value": "content_strategy"},
+        {"path": "limitations", "op": "any_contains", "value": "content gap stage"}
+      ]
+    }
+  ]
+}

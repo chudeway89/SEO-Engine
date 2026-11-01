@@ -186,6 +186,9 @@ async def build_demo_brand(
             # its results pages are synthetic *.example domains, never presented
             # as observations of a real search engine.
             IntegrationProvider.SERP_API,
+            # The development CMS: approved changes and publications land in an
+            # in-memory store and are recorded in development_adapter mode.
+            IntegrationProvider.GENERIC_CMS,
         ):
             connection = await integrations.connect(brand.id, provider)
             connected.append(connection.provider)

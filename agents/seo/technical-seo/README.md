@@ -37,6 +37,7 @@ Schema: `TechnicalAuditOutput`.
 ## Tools
 
 - `crawler`
+- `gsc`
 - `memory`
 
 ## Memory

@@ -409,8 +409,15 @@ class DecisionService:
         provider: str | None = None,
         attributes: dict[str, Any] | None = None,
         correlation_id: str | None = None,
+        approval_floor: str | None = None,
     ) -> Action:
-        """Create an action in PROPOSED, then move it to the status policy dictates."""
+        """Create an action in PROPOSED, then move it to the status policy dictates.
+
+        ``approval_floor`` is a reason approval is required whatever policy says —
+        typically that the executing agent's manifest lists the action type in
+        ``approval_required_for``. Policy can make an action stricter than the
+        floor, never looser: the more restrictive of the two always wins.
+        """
         decision = await self.policies.evaluate(
             ActionRequest(
                 action_type=action_type,
@@ -425,6 +432,15 @@ class DecisionService:
         if not decision.allowed:
             raise PolicyViolationError(
                 "policy blocks this action outright", {"reason": decision.reason}
+            )
+        if approval_floor and not decision.requires_approval:
+            decision = PolicyDecision(
+                allowed=True,
+                requires_approval=True,
+                reason="; ".join(filter(None, [decision.reason, approval_floor])),
+                matched_rules=decision.matched_rules,
+                policy_names=decision.policy_names,
+                risk=decision.risk,
             )
 
         idempotency_key = new_idempotency_key(

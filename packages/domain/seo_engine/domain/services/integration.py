@@ -74,7 +74,7 @@ from seo_engine.schemas.enums import (
 )
 from seo_engine.schemas.events import EventType
 from seo_engine.shared.config import get_settings
-from seo_engine.shared.errors import IntegrationNotConnectedError, ValidationError
+from seo_engine.shared.errors import IntegrationNotConnectedError, NotFoundError, ValidationError
 from seo_engine.shared.ids import utcnow
 from seo_engine.shared.secrets import get_secret_provider
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -178,6 +178,45 @@ class IntegrationService:
             actor_label=self.principal.email,
             brand_id=brand_id,
             reason=f"connected {provider.value} in {mode.value} mode",
+        )
+        return record
+
+    async def disconnect(
+        self, brand_id: uuid.UUID, provider: IntegrationProvider | str
+    ) -> IntegrationConnection:
+        """Revoke a connection and destroy its stored credentials.
+
+        The connection row is kept, marked ``revoked``, so the history of what
+        was synced through it stays attributable; the encrypted credentials are
+        deleted, so nothing can use them again. A revoked provider is no longer
+        an available tool for any agent.
+        """
+        self.principal.require(P_INTEGRATION_CONNECT)
+        provider = IntegrationProvider(provider)
+        record = await self.connections.find_one(
+            IntegrationConnection.brand_id == brand_id,
+            IntegrationConnection.provider == provider.value,
+        )
+        if record is None:
+            raise NotFoundError(
+                "that integration is not connected for this brand", {"provider": provider.value}
+            )
+        removed = await self.credentials.delete_where(
+            IntegrationCredential.connection_id == record.id
+        )
+        record.status = IntegrationStatus.REVOKED.value
+        record.last_error = None
+        await self.session.flush()
+        await record_audit(
+            self.session,
+            tenant_id=self.principal.tenant_id,
+            action="integration.disconnect",
+            resource_type="integration_connection",
+            resource_id=str(record.id),
+            actor_id=str(self.principal.user_id),
+            actor_label=self.principal.email,
+            brand_id=brand_id,
+            reason=f"disconnected {provider.value}; {removed} stored credential(s) destroyed",
         )
         return record
 

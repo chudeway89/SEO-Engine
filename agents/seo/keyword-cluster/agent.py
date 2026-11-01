@@ -182,7 +182,14 @@ class KeywordClusterAgent(BaseAgent):
                     evidence_refs=[evidence.id],
                     target_url=structure.hub_url,
                     source_agent=self.manifest.id,
-                    data={"from_urls": structure.spokes_missing_hub_link},
+                    data={
+                        "from_urls": structure.spokes_missing_hub_link,
+                        "change": {
+                            "to_url": structure.hub_url,
+                            "from_urls": structure.spokes_missing_hub_link,
+                            "anchor_text": structure.label,
+                        },
+                    },
                 )
             )
 

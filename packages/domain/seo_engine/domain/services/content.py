@@ -550,11 +550,21 @@ class ContentService:
     async def approve(self, asset_id: uuid.UUID, *, note: str = "") -> ContentAsset:
         """A person approves the current version for publication."""
         asset = await self.assets.get_or_raise(asset_id)
-        gate = await self.latest_evaluation(asset_id, evaluation_type=EVALUATION_GATE)
+        current = await self.latest_version(asset_id)
+        # The verdict must be for the version being approved: a pass recorded
+        # against an earlier version says nothing about the text now current.
+        gate = (
+            await self.latest_evaluation(
+                asset_id, evaluation_type=EVALUATION_GATE, version_id=current.id
+            )
+            if current is not None
+            else None
+        )
         if gate is None or not gate.passed:
             raise ConflictError(
-                "content can only be approved after it has passed the quality gate",
-                {"asset_id": str(asset_id)},
+                "content can only be approved after its current version has passed the "
+                "quality gate",
+                {"asset_id": str(asset_id), "version": asset.current_version},
             )
         return await self.set_status(asset.id, ContentStatus.APPROVED, reason=note or "approved")
 

@@ -38,11 +38,13 @@ from seo_engine.schemas.enums import (
     RiskLevel,
     SynthesisMode,
 )
+from seo_engine.shared.llm import ModelGateway
 from seo_engine.workflows.mission import MissionWorkflow
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.fixtures.agents import AgentHarness
 from tests.fixtures.fake_site import build_web_client
+from tests.fixtures.models import ScriptedProvider
 
 pytestmark = [pytest.mark.integration]
 
@@ -198,6 +200,36 @@ async def test_the_writer_declares_its_autonomous_action_and_reports_its_mode(
     assert writer["outlines"] == 1
     asset = await content.get_asset(uuid.UUID(writer["drafts"][0]["asset_id"]))
     assert asset.status == ContentStatus.DRAFT.value and asset.current_version == 1
+
+
+async def test_with_a_model_the_writer_writes_prose_and_reports_a_hybrid_run(
+    harness: AgentHarness,
+) -> None:
+    provider = ScriptedProvider(
+        f"# How much does a DNA test cost?\n\n## What affects the price\n\n{PROSE}"
+    )
+    harness.extra["model_gateway"] = ModelGateway(provider=provider)
+    content = ContentService(harness.session, harness.principal)
+    brief = await content.save_brief(harness.brand_id, _brief())
+
+    outcome = await harness.run("CNT-004", {"brief_ids": [str(brief.id)]})
+
+    result = outcome.result
+    assert result.synthesis_mode is SynthesisMode.HYBRID, "a model wrote the prose"
+    writer = result.outputs["content_writer"]
+    assert writer["outlines"] == 0 and writer["drafts"][0]["synthesis_mode"] == "llm"
+    assert provider.requests, "the run went through the injected gateway"
+    # The brand's voice and the brief's prohibited claims reach the model as
+    # policy, never as part of the untrusted channel.
+    policy = "\n".join(m.content for m in provider.requests[0] if m.channel == "developer_policy")
+    assert "Our tests are 100% accurate." in policy
+
+    # A written draft is not mistaken for an outline by the quality gate.
+    asset_id = writer["drafts"][0]["asset_id"]
+    await harness.run("CNT-007", {"asset_ids": [asset_id]})
+    gate = await harness.run("CNT-009", {"asset_ids": [asset_id]})
+    blocking = gate.result.outputs["content_quality_gate"]["results"][0]["blocking"]
+    assert not any("outline" in b for b in blocking)
 
 
 # --- evaluation, optimisation and the gate --------------------------------------
@@ -383,6 +415,10 @@ async def test_publishing_refuses_an_approved_asset_whose_new_version_is_unrevie
 
 
 async def test_without_a_connected_cms_nothing_is_published(harness: AgentHarness) -> None:
+    # The demonstration brand connects the development CMS; revoke it.
+    await IntegrationService(harness.session, harness.principal).disconnect(
+        harness.brand_id, IntegrationProvider.GENERIC_CMS
+    )
     content, asset, _ = await _prose_asset(harness)
     await harness.run("CNT-009", {"asset_ids": [str(asset.id)]})
     await harness.run("POL-001", {"asset_ids": [str(asset.id)]})

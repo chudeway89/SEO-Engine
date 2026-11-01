@@ -51,6 +51,7 @@ def assess_ai_search_readiness(
     website_id: str,
     observed_citations: list[dict] | None = None,
     gsc_connected: bool = False,
+    gsc_unavailable_reason: str | None = None,
 ) -> AISearchReadinessReport:
     """Assess the conditions that make content usable as a source.
 
@@ -228,9 +229,11 @@ def assess_ai_search_readiness(
         "does not produce an 'AI ranking score'.",
     ]
     if not gsc_connected:
+        # Say *why* it was unavailable: "not connected" and "not permitted" are
+        # different facts, and only the caller knows which applies.
         notes.append(
-            "Search Console is not connected, so no query-coverage or search-presence "
-            "signals could be observed."
+            f"Search Console was unavailable ({gsc_unavailable_reason or 'not connected'}), "
+            "so no query-coverage or search-presence signals could be observed."
         )
 
     return AISearchReadinessReport(

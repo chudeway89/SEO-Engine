@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import base64
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 from seo_engine.integrations.base import (
@@ -56,14 +57,20 @@ class WordPressAdapter(CMSAdapter):
         return self._client
 
     async def _request(
-        self, method: str, path: str, *, json: dict | None = None
-    ) -> tuple[dict[str, Any], int]:
+        self,
+        method: str,
+        path: str,
+        *,
+        json: dict | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> tuple[Any, int]:
         client = await self._http()
         response = await client.request(
             method,
             f"{self.site_url}/wp-json/wp/v2{path}",
             headers={"Authorization": f"Basic {self._auth}"},
             json=json,
+            params=params,
         )
         if response.status_code in {401, 403}:
             raise CredentialError(
@@ -97,6 +104,7 @@ class WordPressAdapter(CMSAdapter):
             Capability("cms.draft", "Create and update draft posts"),
             Capability("cms.publish", "Publish an existing draft"),
             Capability("cms.read", "Read existing content"),
+            Capability("cms.page_update", "Change the title or content of a live page or post"),
         ]
 
     async def disconnect(self) -> None:
@@ -136,6 +144,60 @@ class WordPressAdapter(CMSAdapter):
     async def get_content(self, *, external_id: str) -> ProviderResponse:
         payload, status = await self._request("GET", f"/posts/{external_id}")
         return self._response(f"/posts/{external_id}", {}, payload, status_code=status)
+
+    async def find_page(self, *, url: str) -> ProviderResponse:
+        """Find a page or post by the last segment of its URL, confirmed by its link.
+
+        WordPress has no lookup by full URL, so the slug is searched in pages
+        then posts, and a candidate counts only if its own ``link`` has the same
+        path — a same-slug page elsewhere in the hierarchy is not a match.
+        """
+        path = (urlparse(url).path or "/").rstrip("/") or "/"
+        slug = path.rsplit("/", 1)[-1]
+        if not slug:
+            raise IntegrationError(
+                "the site root is a WordPress front-page setting, not a page this "
+                "adapter can locate by slug",
+                {"not_found": True, "url": url},
+            )
+        for collection in ("pages", "posts"):
+            params = {"slug": slug, "context": "edit", "status": "publish"}
+            items, _ = await self._request("GET", f"/{collection}", params=params)
+            for item in items if isinstance(items, list) else []:
+                link_path = (urlparse(str(item.get("link", ""))).path or "/").rstrip("/") or "/"
+                if link_path != path:
+                    continue
+                payload = {
+                    "id": str(item["id"]),
+                    "type": collection[:-1],
+                    "link": item.get("link"),
+                    "title": _rendered(item.get("title")),
+                    "content": _rendered(item.get("content")),
+                }
+                return self._response(f"/{collection}", params, payload, status_code=200)
+        raise IntegrationError(
+            "no published WordPress page or post matches this URL",
+            {"not_found": True, "url": url},
+        )
+
+    async def update_page(
+        self, *, external_id: str, page_type: str, fields: dict[str, Any]
+    ) -> ProviderResponse:
+        if page_type not in {"page", "post"}:
+            raise IntegrationError("unknown WordPress content type", {"type": page_type})
+        body = {k: v for k, v in fields.items() if k in {"title", "content"}}
+        if not body:
+            raise IntegrationError("no supported field to change", {"fields": sorted(fields)})
+        path = f"/{page_type}s/{external_id}"
+        payload, status = await self._request("POST", path, json=body)
+        return self._response(path, body, payload, status_code=status)
+
+
+def _rendered(field: Any) -> str:
+    """WordPress returns ``{"raw": ..., "rendered": ...}``; prefer the raw source."""
+    if isinstance(field, dict):
+        return str(field.get("raw") or field.get("rendered") or "")
+    return str(field or "")
 
 
 class WebflowAdapter(CMSAdapter):
@@ -262,6 +324,10 @@ class DevelopmentCMSAdapter(CMSAdapter):
     def __init__(self, *, site_url: str = "https://demo.seo-engine.local") -> None:
         self.site_url = site_url.rstrip("/")
         self.store: dict[str, dict[str, Any]] = {}
+        #: Live pages, keyed by URL. Any URL "exists" here as an empty synthetic
+        #: page, because there is no real site behind this adapter; every
+        #: response says so.
+        self.pages: dict[str, dict[str, Any]] = {}
 
     async def connect(self) -> HealthStatus:
         return await self.health_check()
@@ -281,6 +347,7 @@ class DevelopmentCMSAdapter(CMSAdapter):
         return [
             Capability("cms.draft", "Create and update in-memory drafts"),
             Capability("cms.publish", "Mark an in-memory draft published"),
+            Capability("cms.page_update", "Change in-memory synthetic pages"),
         ]
 
     async def disconnect(self) -> None:
@@ -336,6 +403,31 @@ class DevelopmentCMSAdapter(CMSAdapter):
         if record is None:
             raise IntegrationError("no such draft", {"external_id": external_id})
         return self._response(f"/drafts/{external_id}", {}, dict(record), status_code=200)
+
+    async def find_page(self, *, url: str) -> ProviderResponse:
+        key = url.rstrip("/") or url
+        record = self.pages.get(key)
+        if record is None:
+            record = {
+                "id": new_ref("page"),
+                "type": "page",
+                "link": url,
+                "title": "",
+                "content": "",
+                "synthetic": True,
+            }
+            self.pages[key] = record
+        return self._response("/pages", {"url": url}, dict(record), status_code=200)
+
+    async def update_page(
+        self, *, external_id: str, page_type: str, fields: dict[str, Any]
+    ) -> ProviderResponse:
+        record = next((p for p in self.pages.values() if p["id"] == external_id), None)
+        if record is None:
+            raise IntegrationError("no such page", {"external_id": external_id})
+        record.update({k: v for k, v in fields.items() if k in {"title", "content"}})
+        record["updated_at"] = utcnow().isoformat()
+        return self._response(f"/pages/{external_id}", dict(fields), dict(record), status_code=200)
 
 
 __all__ = [

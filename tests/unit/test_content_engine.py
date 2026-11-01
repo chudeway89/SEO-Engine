@@ -448,3 +448,13 @@ def test_every_derivative_carries_its_platform_context_and_canonical_source() ->
 def test_an_unknown_platform_is_skipped_rather_than_guessed_at() -> None:
     assets = repurpose(_draft(_GOOD_BODY), platforms=["telepathy"], audience="x")
     assert assets == []
+
+
+def test_markdown_sections_are_split_at_level_two_headings() -> None:
+    from seo_engine.engines.content.generation import markdown_title, sections_from_markdown
+
+    text = "# Title\n\nIntro.\n\n## First\n\nOne.\n\n## Second\n\nTwo\nlines."
+    sections = sections_from_markdown(text)
+    assert [(s.heading, s.body) for s in sections] == [("First", "One."), ("Second", "Two\nlines.")]
+    assert markdown_title(text) == "Title"
+    assert sections_from_markdown("No headings at all.") == []

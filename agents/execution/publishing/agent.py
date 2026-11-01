@@ -103,6 +103,12 @@ class PublishingAgent(BaseAgent):
                     risk_category=facts.risk_category,
                     automation_policy=context.policy.automation_policy,
                     correlation_id=context.correlation_id,
+                    # Publishing is never autonomous, whatever policy allows.
+                    approval_floor=(
+                        f"{self.manifest.id} declares cms.publish as requiring human approval"
+                        if ActionType.CMS_PUBLISH.value in self.manifest.approval_required_for
+                        else None
+                    ),
                 )
             except PolicyViolationError as exc:
                 output.blocked.append(

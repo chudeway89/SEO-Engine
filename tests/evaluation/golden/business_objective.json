@@ -1,0 +1,56 @@
+{
+  "agent_id": "BRD-003",
+  "description": "BRD-003: a goal is measurable only when its data source is connected; the declared goal type outranks wording; every blocker carries its fix; no target is ever set.",
+  "cases": [
+    {
+      "name": "nothing_connected_means_nothing_measurable",
+      "brand": {
+        "goals": [
+          {"goal_type": "acquisition", "description": "Increase qualified organic leads", "timeframe": "6 months"},
+          {"goal_type": "visibility", "description": "Be found before the booking decision"}
+        ]
+      },
+      "expect": [
+        {"path": "outputs.business_objectives.goals", "op": "eq", "value": 2},
+        {"path": "outputs.business_objectives.measurable", "op": "eq", "value": 0},
+        {"path": "outputs.business_objectives.assessments.0.metric", "op": "eq", "value": "qualified_organic_leads"},
+        {"path": "outputs.business_objectives.assessments.1.metric", "op": "eq", "value": "organic_impressions"},
+        {"path": "outputs.business_objectives.assessments.0.blockers", "op": "any_contains", "value": "not connected"},
+        {"path": "recommendations", "op": "len", "value": 2},
+        {"path": "summary", "op": "contains", "value": "No target or baseline"}
+      ]
+    },
+    {
+      "name": "search_console_makes_visibility_measurable",
+      "brand": {
+        "goals": [{"goal_type": "visibility", "description": "Appear for screening questions", "target_value": 10000, "timeframe": "6 months"}],
+        "integrations": ["google_search_console"]
+      },
+      "expect": [
+        {"path": "outputs.business_objectives.measurable", "op": "eq", "value": 1},
+        {"path": "outputs.business_objectives.assessments.0.specificity_gaps", "op": "empty"},
+        {"path": "recommendations", "op": "empty"}
+      ]
+    },
+    {
+      "name": "lead_goal_needs_an_identified_lead_event",
+      "brand": {
+        "goals": [{"goal_type": "acquisition", "description": "More enquiries", "target_value": 50, "timeframe": "Q3"}],
+        "integrations": ["google_analytics_4"]
+      },
+      "expect": [
+        {"path": "outputs.business_objectives.measurable", "op": "eq", "value": 0},
+        {"path": "outputs.business_objectives.assessments.0.blockers", "op": "any_contains", "value": "Confirm which events are leads"}
+      ]
+    },
+    {
+      "name": "no_goals_is_a_recommendation_not_a_guess",
+      "brand": {},
+      "expect": [
+        {"path": "limitations", "op": "any_contains", "value": "no business goals"},
+        {"path": "recommendations.0.type", "op": "eq", "value": "brand.objective_define"},
+        {"path": "outputs.business_objectives.assessments", "op": "empty"}
+      ]
+    }
+  ]
+}

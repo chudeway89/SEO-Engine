@@ -748,7 +748,11 @@ AGENTS_DATA: list[dict[str, Any]] = [
         outputs=[("drafts", "Asset, version, brief, outline flag, synthesis mode, word count.")],
         failures=[
             ("No open brief", "Writes nothing."),
-            ("No model", "Outlines only, stated as a limitation."),
+            (
+                "No model",
+                "Outlines only, stated as a limitation; a person writes the piece over the outline "
+                "(`POST /content/{id}/versions` or the content screen) and asks for review.",
+            ),
         ],
         evals=[
             "never generates prose without a model;",
